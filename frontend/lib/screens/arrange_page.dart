@@ -271,14 +271,29 @@ class _ArrangePageState extends State<ArrangePage> {
   }
 
   Widget _buildEventBox() {
+    final canOpenInput = _tabIndex == 0;
+
     return _Panel(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(
         children: [
-          const Text(
-            '事件箱',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: canOpenInput ? _openInput : null,
+            child: SizedBox(
+              width: double.infinity,
+              height: 24,
+              child: Center(
+                child: Text(
+                  _tabs[_tabIndex],
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 6),
           Expanded(
@@ -293,6 +308,7 @@ class _ArrangePageState extends State<ArrangePage> {
                   isDeleted: page % 3 == 2,
                   canDrag: page % 3 == 0,
                   canComplete: page % 3 == 0,
+                  canOpenInput: page % 3 == 0,
                   onBlankTap: _openInput,
                   onOpen: _openDetail,
                   onComplete: _completeEvent,
@@ -305,6 +321,7 @@ class _ArrangePageState extends State<ArrangePage> {
             tabs: _tabs,
             selectedIndex: _tabIndex,
             onTap: _goToTab,
+            onBlankTap: canOpenInput ? _openInput : null,
           ),
         ],
       ),
@@ -443,6 +460,7 @@ class _EventList extends StatelessWidget {
   final bool isDeleted;
   final bool canDrag;
   final bool canComplete;
+  final bool canOpenInput;
   final VoidCallback onBlankTap;
   final ValueChanged<Event> onOpen;
   final ValueChanged<Event> onComplete;
@@ -453,6 +471,7 @@ class _EventList extends StatelessWidget {
     required this.isDeleted,
     required this.canDrag,
     required this.canComplete,
+    required this.canOpenInput,
     required this.onBlankTap,
     required this.onOpen,
     required this.onComplete,
@@ -461,34 +480,26 @@ class _EventList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scrollbar(
+    final list = Scrollbar(
       child: ListView.separated(
         padding: const EdgeInsets.only(right: 2, bottom: 5),
         itemCount: events.isEmpty ? 1 : events.length + 1,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           if (events.isEmpty) {
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onBlankTap,
-              child: const SizedBox(
-                height: 148,
-                child: Center(
-                  child: Text(
-                    '点击空白处添加事件',
-                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
+            return SizedBox(
+              height: 148,
+              child: Center(
+                child: Text(
+                  canOpenInput ? '点击空白处添加事件' : '暂无事件',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
                 ),
               ),
             );
           }
 
           if (index == events.length) {
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onBlankTap,
-              child: const SizedBox(height: 70),
-            );
+            return const SizedBox(height: 70);
           }
 
           final event = events[index];
@@ -503,6 +514,14 @@ class _EventList extends StatelessWidget {
           );
         },
       ),
+    );
+
+    if (!canOpenInput) return list;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onBlankTap,
+      child: list,
     );
   }
 }
@@ -684,36 +703,57 @@ class _EventBoxTabs extends StatelessWidget {
   final List<String> tabs;
   final int selectedIndex;
   final ValueChanged<int> onTap;
+  final VoidCallback? onBlankTap;
 
   const _EventBoxTabs({
     required this.tabs,
     required this.selectedIndex,
     required this.onTap,
+    this.onBlankTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(tabs.length, (i) {
-        final selected = i == selectedIndex;
-        return GestureDetector(
-          onTap: () => onTap(i),
-          child: Container(
-            width: 52,
-            height: 20,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? Colors.grey.shade300 : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
+      children: [
+        Expanded(child: _TabBlankArea(onTap: onBlankTap)),
+        ...List.generate(tabs.length, (i) {
+          final selected = i == selectedIndex;
+          return GestureDetector(
+            onTap: () => onTap(i),
+            child: Container(
+              width: 52,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? Colors.grey.shade300 : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                tabs[i],
+                style: const TextStyle(fontSize: 10),
+              ),
             ),
-            child: Text(
-              tabs[i],
-              style: const TextStyle(fontSize: 10),
-            ),
-          ),
-        );
-      }),
+          );
+        }),
+        Expanded(child: _TabBlankArea(onTap: onBlankTap)),
+      ],
+    );
+  }
+}
+
+class _TabBlankArea extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  const _TabBlankArea({this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: const SizedBox(height: 20),
     );
   }
 }
@@ -1157,17 +1197,20 @@ class _CalendarEventChip extends StatelessWidget {
 
   Widget _buildChip({required double opacity}) {
     final completed = event.status == 'completed';
+    final stateOpacity = completed ? 0.45 : 1.0;
     return Opacity(
-      opacity: opacity,
+      opacity: opacity * stateOpacity,
       child: Container(
         height: 12,
         margin: const EdgeInsets.only(bottom: 1),
         padding: const EdgeInsets.symmetric(horizontal: 3),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: completed ? Colors.grey.shade300 : Colors.white,
+          color: completed ? Colors.grey.shade200 : Colors.white,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.grey.shade600),
+          border: Border.all(
+            color: completed ? Colors.grey.shade500 : Colors.grey.shade600,
+          ),
         ),
         child: Text(
           event.summary.isNotEmpty ? event.summary : event.title,
