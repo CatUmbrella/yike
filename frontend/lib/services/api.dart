@@ -5,7 +5,10 @@ import 'package:http/http.dart' as http;
 import '../models/event.dart';
 
 class ApiService {
-  static const String _baseUrl = 'http://127.0.0.1:8000/api';
+  static const String _baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://127.0.0.1:8000/api',
+  );
 
   static Future<List<Event>> parseEventText(String text) async {
     try {
