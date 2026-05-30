@@ -12,8 +12,10 @@ desktop.ini
 *.swp
 *.swo
 
-# Logs
+# Logs and temporary files
 *.log
+.buildlog/
+.history
 
 # Environment variables and local secrets
 .env
@@ -49,17 +51,22 @@ frontend/**/doc/api/
 frontend/app.*.symbols
 frontend/app.*.map.json
 
-# Android local and build output
+# Android local files and build output
 frontend/android/local.properties
 frontend/android/.gradle/
+frontend/android/captures/
 frontend/android/app/debug/
 frontend/android/app/profile/
 frontend/android/app/release/
+frontend/android/**/key.properties
+frontend/android/**/*.keystore
+frontend/android/**/*.jks
 
 # Flutter desktop generated build state
 frontend/**/flutter/ephemeral/
 
-# Xcode user-local files
+# Xcode user-local files and dependency outputs
 frontend/ios/Flutter/.last_build_id
 frontend/**/xcuserdata/
 frontend/**/DerivedData/
+frontend/**/Pods/
