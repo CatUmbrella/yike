@@ -11,6 +11,11 @@ class EventInputStyle {
   static const textPrimary = Color(0xFF1D1D1F);
   static const textSecondary = Color(0xFF6B7280);
   static const divider = Color(0xFFE2E8F0);
+  static const errorBg = Color(0xFFFFF3E0);
+  static const errorBorder = Color(0xFFFFCC80);
+  static const errorIcon = Color(0xFFEF6C00);
+  static const errorText = Color(0xFFE65100);
+  static const errorIconSize = 18.0;
 
   static const cardRadius = 28.0;
   static const controlRadius = 24.0;
@@ -33,7 +38,6 @@ class EventInputMetrics {
     required this.navLeadingGap,
     required this.navIconSize,
     required this.navTitleSize,
-    required this.inputHeight,
     required this.inputPadding,
     required this.inputTextSize,
     required this.inputButtonWidth,
@@ -63,7 +67,6 @@ class EventInputMetrics {
   final double navLeadingGap;
   final double navIconSize;
   final double navTitleSize;
-  final double inputHeight;
   final EdgeInsets inputPadding;
   final double inputTextSize;
   final double inputButtonWidth;
@@ -101,8 +104,7 @@ class EventInputMetrics {
         navHeight: 52,
         navLeadingGap: 8,
         navIconSize: 24,
-        navTitleSize: 23,
-        inputHeight: 148,
+        navTitleSize: 16,
         inputPadding: EdgeInsets.fromLTRB(16, 15, 14, 13),
         inputTextSize: 16,
         inputButtonWidth: 94,
@@ -134,8 +136,7 @@ class EventInputMetrics {
         navHeight: 58,
         navLeadingGap: 18,
         navIconSize: 28,
-        navTitleSize: 26,
-        inputHeight: 176,
+        navTitleSize: 18,
         inputPadding: EdgeInsets.fromLTRB(20, 18, 18, 16),
         inputTextSize: 18,
         inputButtonWidth: 104,
@@ -166,8 +167,7 @@ class EventInputMetrics {
       navHeight: 64,
       navLeadingGap: 18,
       navIconSize: 28,
-      navTitleSize: 28,
-      inputHeight: 188,
+      navTitleSize: 20,
       inputPadding: EdgeInsets.fromLTRB(24, 20, 22, 18),
       inputTextSize: 18,
       inputButtonWidth: 110,

@@ -34,8 +34,8 @@ void main() {
       expect(find.text('删除'), findsOneWidget);
       expect(find.text('保存'), findsNothing);
 
-      final textFields = find.byType(TextField);
-      expect(textFields, findsNWidgets(5));
+      final textFields = find.byType(EditableText);
+      expect(textFields, findsNWidgets(4));
 
       await tester.enterText(
         textFields.at(2),
@@ -51,7 +51,9 @@ void main() {
 
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.text('删除'));
+      final deleteButton = find.widgetWithText(FilledButton, '删除');
+      await tester.ensureVisible(deleteButton);
+      tester.widget<FilledButton>(deleteButton).onPressed?.call();
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

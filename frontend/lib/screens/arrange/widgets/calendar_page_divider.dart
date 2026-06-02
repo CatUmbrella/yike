@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../arrange_style.dart';
+
 class CalendarPageDivider extends StatelessWidget {
   final PageController controller;
   final int pageIndex;
@@ -33,7 +35,7 @@ class CalendarPageDivider extends StatelessWidget {
           top: 0,
           bottom: 0,
           child: IgnorePointer(
-            child: Container(width: 1, color: Colors.grey.shade600),
+            child: Container(width: 1, color: ArrangeStyle.gridLine),
           ),
         );
       },

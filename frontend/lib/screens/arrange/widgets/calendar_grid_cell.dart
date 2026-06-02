@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../arrange_style.dart';
+
 class CalendarGridCell extends StatelessWidget {
   final int column;
   final double? width;
@@ -26,8 +28,8 @@ class CalendarGridCell extends StatelessWidget {
         border: Border(
           left: column == 0
               ? BorderSide.none
-              : BorderSide(color: Colors.grey.shade600),
-          top: BorderSide(color: Colors.grey.shade600),
+              : const BorderSide(color: ArrangeStyle.gridLine),
+          top: const BorderSide(color: ArrangeStyle.gridLine),
           right: BorderSide.none,
           bottom: BorderSide.none,
         ),

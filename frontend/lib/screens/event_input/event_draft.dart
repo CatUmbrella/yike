@@ -5,8 +5,6 @@ class EventDraft {
     required this.event,
     this.fromAi = false,
     this.edited = false,
-    this.totalDurationOverridden = false,
-    this.manualTotalMinutes,
     Set<int>? editedStepIndexes,
     Event? originalAiEvent,
   }) : editedStepIndexes = editedStepIndexes ?? <int>{},
@@ -43,14 +41,9 @@ class EventDraft {
   final Event? originalAiEvent;
   bool fromAi;
   bool edited;
-  bool totalDurationOverridden;
-  int? manualTotalMinutes;
   final Set<int> editedStepIndexes;
 
-  int get displayTotalMinutes {
-    if (totalDurationOverridden) return manualTotalMinutes ?? 0;
-    return event.totalMinutes;
-  }
+  int get displayTotalMinutes => event.totalMinutes;
 
   bool stepIsAiSuggestion(int stepIndex) {
     return fromAi && !editedStepIndexes.contains(stepIndex);
@@ -66,8 +59,6 @@ class EventDraft {
     if (original == null) return;
     event = cloneEvent(original);
     edited = false;
-    totalDurationOverridden = false;
-    manualTotalMinutes = null;
     editedStepIndexes.clear();
   }
 }
@@ -78,11 +69,13 @@ Event cloneEvent(Event source) {
     title: source.title,
     summary: source.summary,
     purpose: source.purpose,
+    review: source.review,
     status: source.status,
     quadrant: source.quadrant,
     scheduledDate: source.scheduledDate,
     timeSlot: source.timeSlot,
     calendarOrder: source.calendarOrder,
+    totalMinutesOverride: source.totalMinutesOverride,
     steps: source.steps
         .map(
           (step) => StepItem(

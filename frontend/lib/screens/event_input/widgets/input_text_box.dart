@@ -7,17 +7,17 @@ class InputTextBox extends StatelessWidget {
     super.key,
     required this.controller,
     required this.focusNode,
+    required this.height,
     required this.parsing,
     required this.onChanged,
-    required this.onSubmitted,
     required this.onParseNow,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
+  final double height;
   final bool parsing;
   final ValueChanged<String> onChanged;
-  final VoidCallback onSubmitted;
   final VoidCallback onParseNow;
 
   @override
@@ -25,7 +25,7 @@ class InputTextBox extends StatelessWidget {
     final metrics = EventInputMetrics.of(context);
 
     return Container(
-      height: metrics.inputHeight,
+      height: height,
       padding: metrics.inputPadding,
       decoration: BoxDecoration(
         color: EventInputStyle.card,
@@ -36,7 +36,7 @@ class InputTextBox extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            bottom: metrics.inputButtonHeight + 10,
+            bottom: metrics.inputButtonHeight + _parseButtonBottomOffset,
             child: TextField(
               controller: controller,
               focusNode: focusNode,
@@ -52,7 +52,7 @@ class InputTextBox extends StatelessWidget {
               ),
               decoration: InputDecoration(
                 border: InputBorder.none,
-                hintText: '点击输入或长按讲话ai会自动区分事件',
+                hintText: '点击输入，完成后点击 AI 拆解生成事件',
                 hintStyle: TextStyle(
                   color: const Color(0xFF9AA6B8),
                   fontSize: metrics.inputTextSize,
@@ -62,7 +62,6 @@ class InputTextBox extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
               ),
               onChanged: onChanged,
-              onEditingComplete: onSubmitted,
             ),
           ),
           if (parsing)
@@ -125,3 +124,5 @@ class InputTextBox extends StatelessWidget {
     );
   }
 }
+
+const _parseButtonBottomOffset = 10.0;

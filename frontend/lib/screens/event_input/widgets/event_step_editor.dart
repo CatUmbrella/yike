@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../../models/event.dart';
 import '../event_input_style.dart';
+import 'event_duration_formatter.dart';
+import 'event_duration_picker_sheet.dart';
 import 'measured_underline_text_field.dart';
 
 class EventStepEditor extends StatefulWidget {
@@ -32,9 +34,8 @@ class EventStepEditor extends StatefulWidget {
 
 class _EventStepEditorState extends State<EventStepEditor> {
   late final TextEditingController _descriptionController;
-  late final TextEditingController _minutesController;
   late final FocusNode _descriptionFocusNode;
-  late final FocusNode _minutesFocusNode;
+  MeasuredUnderlineTextLayout? _descriptionTextLayout;
 
   @override
   void initState() {
@@ -42,11 +43,7 @@ class _EventStepEditorState extends State<EventStepEditor> {
     _descriptionController = TextEditingController(
       text: widget.step.description,
     );
-    _minutesController = TextEditingController(
-      text: widget.step.estimatedMin.toString(),
-    );
     _descriptionFocusNode = FocusNode();
-    _minutesFocusNode = FocusNode();
     _descriptionFocusNode.addListener(_deleteWhenEmptyOnBlur);
   }
 
@@ -56,10 +53,7 @@ class _EventStepEditorState extends State<EventStepEditor> {
     if (!_descriptionFocusNode.hasFocus &&
         widget.step.description != _descriptionController.text) {
       _descriptionController.text = widget.step.description;
-    }
-    final minutesText = widget.step.estimatedMin.toString();
-    if (!_minutesFocusNode.hasFocus && minutesText != _minutesController.text) {
-      _minutesController.text = minutesText;
+      _descriptionTextLayout = null;
     }
   }
 
@@ -67,9 +61,7 @@ class _EventStepEditorState extends State<EventStepEditor> {
   void dispose() {
     _descriptionFocusNode.removeListener(_deleteWhenEmptyOnBlur);
     _descriptionController.dispose();
-    _minutesController.dispose();
     _descriptionFocusNode.dispose();
-    _minutesFocusNode.dispose();
     super.dispose();
   }
 
@@ -88,12 +80,12 @@ class _EventStepEditorState extends State<EventStepEditor> {
     return Padding(
       padding: EdgeInsets.only(bottom: metrics.isCompact ? 6 : 8),
       child: Padding(
-        padding: EdgeInsets.only(left: _stepRowIndent(metrics)),
+        padding: const EdgeInsets.only(left: _stepRowIndent),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final timelineWidth = metrics.isCompact ? 12.0 : 14.0;
+            const timelineWidth = _stepTimelineWidth;
             final timelineGap = metrics.isCompact ? 8.0 : 10.0;
-            final durationWidth = metrics.isCompact ? 54.0 : 60.0;
+            final durationWidth = metrics.isCompact ? 70.0 : 82.0;
             final durationGap = metrics.isCompact ? 6.0 : 8.0;
             final contentWidth =
                 constraints.maxWidth - timelineWidth - timelineGap;
@@ -177,46 +169,50 @@ class _EventStepEditorState extends State<EventStepEditor> {
       maxLines: null,
       keyboardType: TextInputType.multiline,
       contentPadding: _descriptionPadding,
-      minUnderlineWidth: 72,
-      underlineExtension: _stepUnderlineExtension,
+      textAreaInset: _stepTextAreaInset,
+      fullWidthLine: true,
+      onTextLayoutChanged: _handleTextLayoutChanged,
       onChanged: (value) {
-        if (value.trim().isEmpty) {
-          widget.onEmpty();
-          return;
-        }
         setState(() {});
+        if (value.trim().isEmpty) return;
         widget.onDescriptionChanged(value);
       },
     );
   }
 
   Widget _durationField({required EventInputMetrics metrics}) {
-    return TextField(
-      controller: _minutesController,
-      focusNode: _minutesFocusNode,
-      keyboardType: TextInputType.number,
-      textAlign: TextAlign.right,
-      cursorColor: EventInputStyle.accent,
-      style: TextStyle(
-        color: EventInputStyle.accent,
-        fontSize: metrics.bodyTextSize,
-        fontStyle: FontStyle.italic,
-      ),
-      decoration: InputDecoration(
-        isDense: true,
-        suffixText: ' min',
-        suffixStyle: TextStyle(
-          color: EventInputStyle.accent,
-          fontSize: metrics.bodyTextSize,
-          fontStyle: FontStyle.italic,
+    return Semantics(
+      button: true,
+      label: '修改预计耗时',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _showDurationPicker,
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            formatEventDuration(widget.step.estimatedMin),
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.visible,
+            style: TextStyle(
+              color: EventInputStyle.accent,
+              fontSize: metrics.bodyTextSize,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
         ),
-        border: InputBorder.none,
-        contentPadding: const EdgeInsets.only(top: 1),
       ),
-      onChanged: (value) {
-        widget.onMinutesChanged(int.tryParse(value) ?? 0);
-      },
     );
+  }
+
+  Future<void> _showDurationPicker() async {
+    FocusScope.of(context).unfocus();
+    final selectedMinutes = await showEventDurationPickerSheet(
+      context: context,
+      initialMinutes: widget.step.estimatedMin,
+    );
+    if (!mounted || selectedMinutes == null) return;
+    widget.onMinutesChanged(selectedMinutes);
   }
 
   _StepTextLayout _measureTextLayout(
@@ -226,10 +222,23 @@ class _EventStepEditorState extends State<EventStepEditor> {
   ) {
     final textWidth = math.max(
       0.0,
-      fieldWidth - _descriptionPadding.horizontal,
+      fieldWidth - _descriptionPadding.horizontal - _stepTextAreaInset,
     );
     if (textWidth <= 0) {
       return const _StepTextLayout(height: 28, durationTop: 0);
+    }
+
+    final liveLayout = _descriptionTextLayout;
+    if (liveLayout != null && liveLayout.text == _descriptionController.text) {
+      return _layoutFromLineInfo(
+        lineCount: liveLayout.lineCount,
+        lineHeight: liveLayout.lineHeight,
+        lastLineWidth: _descriptionController.text.trim().isEmpty
+            ? 0.0
+            : liveLayout.lastLineWidth + _stepUnderlineExtension,
+        textWidth: textWidth,
+        reservedDurationWidth: reservedDurationWidth,
+      );
     }
 
     final painter = TextPainter(
@@ -248,6 +257,22 @@ class _EventStepEditorState extends State<EventStepEditor> {
     final lastLineWidth = _descriptionController.text.trim().isEmpty
         ? 0.0
         : lines.last.width + _stepUnderlineExtension;
+    return _layoutFromLineInfo(
+      lineCount: lineCount,
+      lineHeight: lineHeight,
+      lastLineWidth: lastLineWidth,
+      textWidth: textWidth,
+      reservedDurationWidth: reservedDurationWidth,
+    );
+  }
+
+  _StepTextLayout _layoutFromLineInfo({
+    required int lineCount,
+    required double lineHeight,
+    required double lastLineWidth,
+    required double textWidth,
+    required double reservedDurationWidth,
+  }) {
     final durationThreshold = math.max(0.0, textWidth - reservedDurationWidth);
     final durationLineIndex =
         lastLineWidth >= durationThreshold && durationThreshold > 0
@@ -265,6 +290,13 @@ class _EventStepEditorState extends State<EventStepEditor> {
     );
   }
 
+  void _handleTextLayoutChanged(MeasuredUnderlineTextLayout layout) {
+    if (!mounted || layout == _descriptionTextLayout) return;
+    setState(() {
+      _descriptionTextLayout = layout;
+    });
+  }
+
   void _deleteWhenEmptyOnBlur() {
     if (mounted &&
         !_descriptionFocusNode.hasFocus &&
@@ -278,16 +310,14 @@ class _EventStepEditorState extends State<EventStepEditor> {
     if (index < names.length) return names[index];
     return '第${index + 1}步';
   }
-
-  double _stepRowIndent(EventInputMetrics metrics) {
-    return metrics.isCompact ? 18 : 19;
-  }
 }
 
 const _descriptionPadding = EdgeInsets.only(bottom: 8);
 const _stepRowTop = 7.0;
+const _stepRowIndent = 19.0;
 const _stepTextLineHeight = 1.48;
 const _stepUnderlineExtension = 18.0;
+const _stepTextAreaInset = 2.0;
 
 class _StepTextLayout {
   const _StepTextLayout({required this.height, required this.durationTop});
@@ -305,12 +335,12 @@ class _StepTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final metrics = EventInputMetrics.of(context);
-    final dotSize = metrics.isCompact ? 9.0 : 10.0;
+    const dotSize = _stepDotSize;
     final firstLineHeight = metrics.bodyTextSize * _stepTextLineHeight;
     final dotTop = _stepRowTop + (firstLineHeight - dotSize) / 2;
 
     return SizedBox(
-      width: metrics.isCompact ? 12 : 14,
+      width: _stepTimelineWidth,
       height: height,
       child: Stack(
         alignment: Alignment.topCenter,
@@ -337,3 +367,6 @@ class _StepTimeline extends StatelessWidget {
     );
   }
 }
+
+const _stepDotSize = 10.0;
+const _stepTimelineWidth = 14.0;

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../arrange_style.dart';
+
 class RoundButton extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -14,17 +16,22 @@ class RoundButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = ArrangeLayoutMetrics.forWidth(
+      MediaQuery.sizeOf(context).width,
+    ).compact;
+    final size = compact ? 54.0 : 62.0;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 42,
-        height: 42,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: ArrangeStyle.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.grey.shade500),
+          border: Border.all(color: ArrangeStyle.border),
+          boxShadow: ArrangeStyle.panelShadow,
         ),
-        child: Icon(icon, color: color, size: 32),
+        child: Icon(icon, color: color, size: compact ? 34 : 40),
       ),
     );
   }

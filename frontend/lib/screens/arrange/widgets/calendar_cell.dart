@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/event.dart';
 import '../arrange_constants.dart';
+import '../arrange_style.dart';
 import 'calendar_grid_cell.dart';
 
 class CalendarCell extends StatefulWidget {
@@ -56,8 +57,8 @@ class _CalendarCellState extends State<CalendarCell> {
           onTap: widget.onBlankTap,
           child: CalendarGridCell(
             column: widget.column,
-            padding: const EdgeInsets.all(2),
-            color: isHovering ? Colors.grey.shade100 : null,
+            padding: const EdgeInsets.all(3),
+            color: isHovering ? ArrangeStyle.accentSofter : null,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final content = Column(
@@ -154,31 +155,46 @@ class _CalendarEventChip extends StatelessWidget {
 
   Widget _buildChip({required double opacity}) {
     final completed = event.status == 'completed';
+    final colors = ArrangeQuadrants.colorsFor(event.quadrant);
     final stateOpacity = completed ? 0.45 : 1.0;
     return Opacity(
       opacity: opacity * stateOpacity,
       child: Container(
-        height: calendarEventChipHeight,
         margin: const EdgeInsets.only(bottom: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+        constraints: const BoxConstraints(
+          minHeight: calendarEventChipMinHeight,
+        ),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: completed ? Colors.grey.shade200 : Colors.white,
-          borderRadius: BorderRadius.circular(6),
+          color: completed ? const Color(0xFFE9EEF4) : colors.soft,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: completed ? Colors.grey.shade500 : Colors.grey.shade600,
+            color: completed ? const Color(0xFFC9D3DE) : colors.border,
           ),
+          boxShadow: completed ? null : ArrangeStyle.itemShadow,
         ),
         child: Text(
-          event.summary.isNotEmpty ? event.summary : event.title,
-          maxLines: 1,
+          _eventDisplayName(event),
+          maxLines: 2,
+          softWrap: true,
           overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 6.5,
-            color: completed ? Colors.grey.shade700 : Colors.black,
+            fontSize: 9,
+            height: 1.05,
+            fontWeight: FontWeight.w700,
+            color: completed ? ArrangeStyle.textSecondary : colors.accent,
           ),
         ),
       ),
     );
+  }
+
+  String _eventDisplayName(Event event) {
+    final summary = event.summary.trim();
+    if (summary.isNotEmpty) return summary;
+    final title = event.title.trim();
+    return title.isEmpty ? '(无标题)' : title;
   }
 }

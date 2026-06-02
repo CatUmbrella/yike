@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/event.dart';
 import '../arrange_constants.dart';
+import '../arrange_style.dart';
 import 'calendar_cell.dart';
 import 'calendar_grid_cell.dart';
 
@@ -37,10 +38,13 @@ class CalendarGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = ArrangeLayoutMetrics.forWidth(
+      MediaQuery.sizeOf(context).width,
+    );
     return Column(
       children: [
         SizedBox(
-          height: 24,
+          height: metrics.compact ? 24 : 28,
           child: Row(
             children: [
               CalendarGridCell(
@@ -59,14 +63,22 @@ class CalendarGrid extends StatelessWidget {
                       children: [
                         Text(
                           weekLabels[i],
-                          style: const TextStyle(fontSize: 8),
+                          style: TextStyle(
+                            fontSize: metrics.compact ? 9 : 10,
+                            fontWeight: FontWeight.w600,
+                            color: ArrangeStyle.textPrimary,
+                          ),
                         ),
-                        const SizedBox(width: 1),
+                        const SizedBox(width: 2),
                         Padding(
-                          padding: const EdgeInsets.only(top: 5),
+                          padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             '/${day.day}',
-                            style: const TextStyle(fontSize: 6),
+                            style: TextStyle(
+                              fontSize: metrics.compact ? 7.5 : 9,
+                              fontWeight: FontWeight.w500,
+                              color: ArrangeStyle.textSecondary,
+                            ),
                           ),
                         ),
                       ],
@@ -78,38 +90,41 @@ class CalendarGrid extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Column(
-            children: List.generate(timeSlots.length, (rowIndex) {
-              final slot = timeSlots[rowIndex];
-              return Expanded(
-                flex: slot.rowFlex,
-                child: Row(
-                  children: [
-                    CalendarGridCell(
-                      width: calendarTimeAxisWidth,
-                      column: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 1),
-                      child: _TimeAxisLabel(slot: slot),
-                    ),
-                    ...List.generate(7, (columnIndex) {
-                      final day = monday.add(Duration(days: columnIndex));
-                      return Expanded(
-                        child: CalendarCell(
-                          column: columnIndex + 1,
-                          events: eventsForCell(day, slot),
-                          onBlankTap: onBlankTap,
-                          onEventDrop: (event, insertIndex) {
-                            return onEventDrop(event, day, slot, insertIndex);
-                          },
-                          onEventTap: onEventTap,
-                          onEventComplete: onEventComplete,
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              );
-            }),
+          child: Padding(
+            padding: EdgeInsets.only(bottom: metrics.calendarGridBottomPadding),
+            child: Column(
+              children: List.generate(timeSlots.length, (rowIndex) {
+                final slot = timeSlots[rowIndex];
+                return Expanded(
+                  flex: slot.rowFlex,
+                  child: Row(
+                    children: [
+                      CalendarGridCell(
+                        width: calendarTimeAxisWidth,
+                        column: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 1),
+                        child: _TimeAxisLabel(slot: slot),
+                      ),
+                      ...List.generate(7, (columnIndex) {
+                        final day = monday.add(Duration(days: columnIndex));
+                        return Expanded(
+                          child: CalendarCell(
+                            column: columnIndex + 1,
+                            events: eventsForCell(day, slot),
+                            onBlankTap: onBlankTap,
+                            onEventDrop: (event, insertIndex) {
+                              return onEventDrop(event, day, slot, insertIndex);
+                            },
+                            onEventTap: onEventTap,
+                            onEventComplete: onEventComplete,
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              }),
+            ),
           ),
         ),
       ],
@@ -125,9 +140,10 @@ class _TimeAxisLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textStyle = TextStyle(
-      fontSize: 7,
-      height: 0.95,
-      color: Colors.grey.shade900,
+      fontSize: 9.5,
+      height: 1.0,
+      fontWeight: FontWeight.w500,
+      color: ArrangeStyle.textPrimary,
     );
 
     return Center(
@@ -137,7 +153,10 @@ class _TimeAxisLabel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(slot.start, style: textStyle),
-            Text('-', style: textStyle.copyWith(color: Colors.grey.shade600)),
+            Text(
+              '-',
+              style: textStyle.copyWith(color: ArrangeStyle.textSecondary),
+            ),
             Text(slot.end, style: textStyle),
           ],
         ),

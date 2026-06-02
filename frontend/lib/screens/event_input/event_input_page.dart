@@ -17,32 +17,40 @@ class _EventInputScreenState extends State<EventInputScreen> {
   final _controller = EventInputController();
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
+  bool _exiting = false;
 
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(_handleFocusChange);
     _controller.loadExistingEvents();
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_handleFocusChange);
     _controller.dispose();
     _textController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  void _handleFocusChange() {
-    if (!_focusNode.hasFocus) {
-      _controller.requestParseAfterInputSettled();
-    }
+  void _dismissKeyboard() {
+    FocusScope.of(context).unfocus();
   }
 
-  void _dismissKeyboardAndParse() {
+  Future<void> _saveAndExit() async {
+    if (_exiting) return;
+    _exiting = true;
     FocusScope.of(context).unfocus();
-    _controller.requestParseAfterInputSettled();
+    final failedCount = await _controller.saveValidDrafts();
+    if (!mounted) return;
+    if (failedCount > 0) {
+      _exiting = false;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$failedCount 个事件保存失败，请稍后重试')));
+      return;
+    }
+    Navigator.pop(context);
   }
 
   Future<void> _deleteDraft(int draftIndex) async {
@@ -61,118 +69,147 @@ class _EventInputScreenState extends State<EventInputScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: EventInputStyle.background,
-      resizeToAvoidBottomInset: true,
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: _dismissKeyboardAndParse,
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final metrics = EventInputMetrics.forWidth(constraints.maxWidth);
-              final contentWidth = metrics.contentWidthFor(
-                constraints.maxWidth,
-              );
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _saveAndExit();
+      },
+      child: Scaffold(
+        backgroundColor: EventInputStyle.background,
+        resizeToAvoidBottomInset: true,
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _dismissKeyboard,
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final mediaQuery = MediaQuery.of(context);
+                final stableAvailableHeight =
+                    mediaQuery.size.height -
+                    mediaQuery.padding.top -
+                    mediaQuery.padding.bottom;
+                final metrics = EventInputMetrics.forWidth(
+                  constraints.maxWidth,
+                );
+                final contentWidth = metrics.contentWidthFor(
+                  constraints.maxWidth,
+                );
+                final inputHeight = _inputHeightFor(
+                  metrics,
+                  stableAvailableHeight,
+                );
 
-              return EventInputLayoutScope(
-                metrics: metrics,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: contentWidth,
-                    height: constraints.maxHeight,
-                    child: AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, _) {
-                        final state = _controller.state;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _NavigationHeader(
-                              onBack: () => Navigator.pop(context),
-                            ),
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  metrics.horizontalPadding,
-                                  metrics.isCompact ? 4 : 8,
-                                  metrics.horizontalPadding,
-                                  0,
-                                ),
-                                child: Column(
-                                  children: [
-                                    InputTextBox(
-                                      controller: _textController,
-                                      focusNode: _focusNode,
-                                      parsing: state.parsing,
-                                      onChanged: _controller.updateInputText,
-                                      onSubmitted: _controller
-                                          .requestParseAfterInputSettled,
-                                      onParseNow: _controller.parseInputNow,
-                                    ),
-                                    if (state.errorText != null) ...[
-                                      SizedBox(
-                                        height: metrics.isCompact ? 8 : 12,
+                return EventInputLayoutScope(
+                  metrics: metrics,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: contentWidth,
+                      height: constraints.maxHeight,
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, _) {
+                          final state = _controller.state;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _NavigationHeader(onBack: () => _saveAndExit()),
+                              Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    metrics.horizontalPadding,
+                                    metrics.isCompact ? 4 : 8,
+                                    metrics.horizontalPadding,
+                                    0,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      InputTextBox(
+                                        controller: _textController,
+                                        focusNode: _focusNode,
+                                        height: inputHeight,
+                                        parsing: state.parsing,
+                                        onChanged: _controller.updateInputText,
+                                        onParseNow: _controller.parseInputNow,
                                       ),
-                                      _InputErrorBanner(
-                                        text: state.errorText!,
-                                        canRetry:
-                                            state.failed &&
-                                            state.inputText.trim().isNotEmpty,
-                                        onRetry: _controller.parseInputNow,
+                                      if (state.errorText != null) ...[
+                                        SizedBox(
+                                          height: metrics.isCompact ? 8 : 12,
+                                        ),
+                                        _InputErrorBanner(
+                                          text: state.errorText!,
+                                          canRetry:
+                                              state.failed &&
+                                              state.inputText.trim().isNotEmpty,
+                                          onRetry: _controller.parseInputNow,
+                                        ),
+                                      ],
+                                      SizedBox(
+                                        height: metrics.isCompact ? 12 : 16,
+                                      ),
+                                      Expanded(
+                                        child: EventDetailPager(
+                                          state: state,
+                                          onDeleteDraft: _deleteDraft,
+                                          onResetDraft:
+                                              _controller.resetAiSuggestion,
+                                          onTitleChanged:
+                                              _controller.updateTitle,
+                                          onSummaryChanged:
+                                              _controller.updateSummary,
+                                          onPurposeChanged:
+                                              _controller.updatePurpose,
+                                          onTotalMinutesChanged:
+                                              _controller.updateTotalMinutes,
+                                          onStepDescriptionChanged:
+                                              _controller.updateStepDescription,
+                                          onStepMinutesChanged:
+                                              _controller.updateStepMinutes,
+                                          onAddStep: _controller.addStep,
+                                          onRemoveStep: _controller.removeStep,
+                                        ),
                                       ),
                                     ],
-                                    SizedBox(
-                                      height: metrics.isCompact ? 12 : 16,
-                                    ),
-                                    Expanded(
-                                      child: EventDetailPager(
-                                        state: state,
-                                        onDeleteDraft: _deleteDraft,
-                                        onResetDraft:
-                                            _controller.resetAiSuggestion,
-                                        onTitleChanged: _controller.updateTitle,
-                                        onSummaryChanged:
-                                            _controller.updateSummary,
-                                        onPurposeChanged:
-                                            _controller.updatePurpose,
-                                        onStepDescriptionChanged:
-                                            _controller.updateStepDescription,
-                                        onStepMinutesChanged:
-                                            _controller.updateStepMinutes,
-                                        onAddStep: _controller.addStep,
-                                        onRemoveStep: _controller.removeStep,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                metrics.horizontalPadding,
-                                metrics.isCompact ? 8 : 10,
-                                metrics.horizontalPadding,
-                                metrics.bottomPadding,
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  metrics.horizontalPadding,
+                                  metrics.isCompact ? 8 : 10,
+                                  metrics.horizontalPadding,
+                                  metrics.bottomPadding,
+                                ),
+                                child: EventInputActions(
+                                  onAddCustomEvent: _controller.addCustomEvent,
+                                  onVoiceInput: _showVoiceComingSoon,
+                                ),
                               ),
-                              child: EventInputActions(
-                                onAddCustomEvent: _controller.addCustomEvent,
-                                onVoiceInput: _showVoiceComingSoon,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
     );
+  }
+
+  double _inputHeightFor(EventInputMetrics metrics, double availableHeight) {
+    final proportionalHeight = availableHeight * 0.22;
+    if (metrics.isCompact) {
+      return proportionalHeight.clamp(118.0, 154.0).toDouble();
+    }
+    if (metrics.isExpanded) {
+      return proportionalHeight.clamp(160.0, 196.0).toDouble();
+    }
+    return proportionalHeight.clamp(148.0, 184.0).toDouble();
   }
 }
 
@@ -226,22 +263,30 @@ class _InputErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = EventInputMetrics.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50,
+        color: EventInputStyle.errorBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.shade200),
+        border: Border.all(color: EventInputStyle.errorBorder),
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, color: Colors.orange.shade700, size: 18),
+          Icon(
+            Icons.error_outline,
+            color: EventInputStyle.errorIcon,
+            size: EventInputStyle.errorIconSize,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
+              style: TextStyle(
+                color: EventInputStyle.errorText,
+                fontSize: metrics.bodyTextSize,
+              ),
             ),
           ),
           if (canRetry) TextButton(onPressed: onRetry, child: const Text('重试')),

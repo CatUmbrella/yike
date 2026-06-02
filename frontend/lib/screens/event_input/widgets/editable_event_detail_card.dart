@@ -16,6 +16,7 @@ class EditableEventDetailCard extends StatelessWidget {
     required this.onTitleChanged,
     required this.onSummaryChanged,
     required this.onPurposeChanged,
+    required this.onTotalMinutesChanged,
     required this.onStepDescriptionChanged,
     required this.onStepMinutesChanged,
     required this.onAddStep,
@@ -29,6 +30,7 @@ class EditableEventDetailCard extends StatelessWidget {
   final ValueChanged<String> onTitleChanged;
   final ValueChanged<String> onSummaryChanged;
   final ValueChanged<String> onPurposeChanged;
+  final ValueChanged<int> onTotalMinutesChanged;
   final void Function(int stepIndex, String value) onStepDescriptionChanged;
   final void Function(int stepIndex, int value) onStepMinutesChanged;
   final VoidCallback onAddStep;
@@ -75,7 +77,10 @@ class EditableEventDetailCard extends StatelessWidget {
                 ),
               ),
               SizedBox(width: metrics.isCompact ? 8 : 12),
-              EventDurationEditor(totalMinutes: draft.displayTotalMinutes),
+              EventDurationEditor(
+                totalMinutes: draft.displayTotalMinutes,
+                onChanged: onTotalMinutesChanged,
+              ),
             ],
           ),
           SizedBox(height: metrics.isCompact ? 8 : 10),
@@ -109,7 +114,7 @@ class EditableEventDetailCard extends StatelessWidget {
             ...List.generate(event.steps.length, (stepIndex) {
               final step = event.steps[stepIndex];
               return EventStepEditor(
-                key: ValueKey('draft-$draftIndex-step-${step.stepOrder}'),
+                key: ObjectKey(step),
                 stepIndex: stepIndex,
                 step: step,
                 suggestion: draft.stepIsAiSuggestion(stepIndex),
@@ -132,12 +137,12 @@ class EditableEventDetailCard extends StatelessWidget {
                 onPressed: onAddStep,
                 icon: Icon(
                   Icons.add_rounded,
-                  size: metrics.isCompact ? 27 : 29,
+                  size: metrics.isCompact ? 23 : 25,
                 ),
                 color: EventInputStyle.accent,
                 style: IconButton.styleFrom(
                   side: const BorderSide(color: EventInputStyle.accent),
-                  fixedSize: Size.square(metrics.isCompact ? 36 : 40),
+                  fixedSize: Size.square(metrics.isCompact ? 31 : 34),
                   padding: EdgeInsets.zero,
                 ),
               ),
@@ -165,12 +170,15 @@ class EditableEventDetailCard extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.red.shade500,
                   foregroundColor: Colors.white,
-                  minimumSize: Size(metrics.isCompact ? 66 : 72, 38),
+                  minimumSize: Size(metrics.isCompact ? 56 : 62, 32),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: metrics.isCompact ? 12 : 14,
+                  ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(19),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   textStyle: TextStyle(
-                    fontSize: metrics.isCompact ? 12 : 13,
+                    fontSize: metrics.isCompact ? 11 : 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -284,12 +292,9 @@ class _BlueBullet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final metrics = EventInputMetrics.of(context);
-    final size = metrics.isCompact ? 8.0 : 9.0;
-
     return Container(
-      width: size,
-      height: size,
+      width: _blueBulletSize,
+      height: _blueBulletSize,
       decoration: const BoxDecoration(
         color: EventInputStyle.accent,
         shape: BoxShape.circle,
@@ -297,6 +302,8 @@ class _BlueBullet extends StatelessWidget {
     );
   }
 }
+
+const _blueBulletSize = 9.0;
 
 class _DraftTextField extends StatefulWidget {
   const _DraftTextField({

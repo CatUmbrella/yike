@@ -1,28 +1,40 @@
 import 'package:flutter/material.dart';
 
+import '../arrange_style.dart';
+
 class ArrangePanel extends StatelessWidget {
   final EdgeInsets margin;
   final EdgeInsets padding;
+  final double? radius;
   final Widget child;
 
   const ArrangePanel({
     super.key,
     required this.margin,
     required this.padding,
+    this.radius,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
+    final resolvedRadius =
+        radius ??
+        ArrangeLayoutMetrics.forWidth(
+          MediaQuery.sizeOf(context).width,
+        ).panelRadius;
+    final borderRadius = BorderRadius.circular(resolvedRadius);
+
     return Container(
       margin: margin,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade600),
+        color: ArrangeStyle.surface,
+        borderRadius: borderRadius,
+        border: Border.all(color: ArrangeStyle.border),
+        boxShadow: ArrangeStyle.panelShadow,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: borderRadius,
         child: Padding(padding: padding, child: child),
       ),
     );

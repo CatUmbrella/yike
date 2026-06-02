@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+
+import 'screens/arrange/arrange_style.dart';
 import 'screens/arrange_page.dart';
+import 'screens/data_page.dart';
 import 'screens/pomodoro_page.dart';
 import 'screens/template_page.dart';
-import 'screens/data_page.dart';
 
 void main() => runApp(const YiKeApp());
 
@@ -15,9 +17,9 @@ class YiKeApp extends StatelessWidget {
       title: '一刻',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF5DADE2),
+        colorSchemeSeed: ArrangeStyle.accent,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFEBF5FB),
+        scaffoldBackgroundColor: ArrangeStyle.background,
       ),
       home: const HomePage(),
     );
@@ -36,52 +38,76 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    const pages = [
-      ArrangePage(),
-      PomodoroPage(),
-      TemplatePage(),
-      DataPage(),
-    ];
+    const pages = [ArrangePage(), PomodoroPage(), TemplatePage(), DataPage()];
     return Scaffold(
       body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade400)),
+      bottomNavigationBar: _buildBottomNavigation(context),
+    );
+  }
+
+  Widget _buildBottomNavigation(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 390;
+    const labels = ['安排', '番茄钟', '模板', '数据'];
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 14 : 24,
+          6,
+          compact ? 14 : 24,
+          8,
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(4, (i) {
-                final labels = ['安排', '番茄钟', '模板', '数据'];
-                final selected = i == _index;
-                return GestureDetector(
+        child: Container(
+          height: compact ? 52 : 56,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: ArrangeStyle.surface,
+            borderRadius: BorderRadius.circular(34),
+            border: Border.all(color: ArrangeStyle.border),
+            boxShadow: ArrangeStyle.panelShadow,
+          ),
+          child: Row(
+            children: List.generate(labels.length, (i) {
+              final selected = i == _index;
+              return Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => setState(() => _index = i),
-                  child: Container(
-                    width: 62,
-                    height: 34,
-                    alignment: Alignment.center,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    height: compact ? 38 : 42,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
                     decoration: BoxDecoration(
                       color: selected
-                          ? Colors.grey.shade300
+                          ? ArrangeStyle.accentSoft
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(17),
+                      borderRadius: BorderRadius.circular(25),
                     ),
-                    child: Text(
-                      labels[i],
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                            selected ? FontWeight.bold : FontWeight.normal,
-                        color: Colors.black87,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          labels[i],
+                          style: TextStyle(
+                            fontSize: compact ? 15 : 17,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: selected
+                                ? ArrangeStyle.accent
+                                : ArrangeStyle.textPrimary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                );
-              }),
-            ),
+                ),
+              );
+            }),
           ),
         ),
       ),

@@ -35,6 +35,9 @@ backend/htmlcov/
 backend/.coverage
 
 # Runtime databases
+*.db
+*.db-shm
+*.db-wal
 backend/*.db
 backend/*.db-shm
 backend/*.db-wal

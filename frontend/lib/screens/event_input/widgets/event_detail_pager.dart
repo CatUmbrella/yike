@@ -13,6 +13,7 @@ class EventDetailPager extends StatelessWidget {
     required this.onTitleChanged,
     required this.onSummaryChanged,
     required this.onPurposeChanged,
+    required this.onTotalMinutesChanged,
     required this.onStepDescriptionChanged,
     required this.onStepMinutesChanged,
     required this.onAddStep,
@@ -25,6 +26,7 @@ class EventDetailPager extends StatelessWidget {
   final void Function(int draftIndex, String value) onTitleChanged;
   final void Function(int draftIndex, String value) onSummaryChanged;
   final void Function(int draftIndex, String value) onPurposeChanged;
+  final void Function(int draftIndex, int value) onTotalMinutesChanged;
   final void Function(int draftIndex, int stepIndex, String value)
   onStepDescriptionChanged;
   final void Function(int draftIndex, int stepIndex, int value)
@@ -58,6 +60,9 @@ class EventDetailPager extends StatelessWidget {
             onTitleChanged: (value) => onTitleChanged(index, value),
             onSummaryChanged: (value) => onSummaryChanged(index, value),
             onPurposeChanged: (value) => onPurposeChanged(index, value),
+            onTotalMinutesChanged: (value) {
+              onTotalMinutesChanged(index, value);
+            },
             onStepDescriptionChanged: (stepIndex, value) {
               onStepDescriptionChanged(index, stepIndex, value);
             },

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../models/event.dart';
@@ -6,6 +8,7 @@ import '../event_detail.dart';
 import '../event_input.dart';
 import 'arrange_constants.dart';
 import 'arrange_helpers.dart';
+import 'arrange_style.dart';
 import 'widgets/arrange_panel.dart';
 import 'widgets/calendar_grid.dart';
 import 'widgets/calendar_page_divider.dart';
@@ -21,15 +24,23 @@ class ArrangePage extends StatefulWidget {
   State<ArrangePage> createState() => _ArrangePageState();
 }
 
-class _ArrangePageState extends State<ArrangePage> {
+class _ArrangePageState extends State<ArrangePage>
+    with SingleTickerProviderStateMixin {
   final _pageController = PageController(initialPage: initialEventPage);
   final _calendarPageController = PageController(
     initialPage: initialCalendarPage,
   );
+  late final AnimationController _calendarFlipController;
+  late final Animation<double> _calendarFlipAnimation;
 
   int _pageIndex = initialEventPage;
   int _calendarPageIndex = initialCalendarPage;
-  bool _showQuadrant = false;
+  int? _eventTabAnimationTargetPage;
+  int? _eventTabAnimationTargetTab;
+  int _eventTabAnimationSerial = 0;
+  bool _visibleCalendarSideIsQuadrant = false;
+  bool _targetCalendarSideIsQuadrant = false;
+  int _calendarFlipSerial = 0;
 
   List<Event> _inboxEvents = [];
   List<Event> _calendarEvents = [];
@@ -38,11 +49,21 @@ class _ArrangePageState extends State<ArrangePage> {
 
   int get _tabIndex => _pageIndex % 3;
 
+  int get _displayTabIndex => _eventTabAnimationTargetTab ?? _tabIndex;
+
   int get _weekOffset => _calendarPageIndex - initialCalendarPage;
 
   @override
   void initState() {
     super.initState();
+    _calendarFlipController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    );
+    _calendarFlipAnimation = CurvedAnimation(
+      parent: _calendarFlipController,
+      curve: Curves.easeInOutCubic,
+    );
     _load();
   }
 
@@ -50,6 +71,7 @@ class _ArrangePageState extends State<ArrangePage> {
   void dispose() {
     _pageController.dispose();
     _calendarPageController.dispose();
+    _calendarFlipController.dispose();
     super.dispose();
   }
 
@@ -131,11 +153,78 @@ class _ArrangePageState extends State<ArrangePage> {
 
   void _goToTab(int tabIndex) {
     final base = _pageIndex - _tabIndex;
-    _pageController.animateToPage(
-      base + tabIndex,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOut,
-    );
+    final targetPage = base + tabIndex;
+    if (targetPage == _pageIndex) return;
+
+    final animationSerial = ++_eventTabAnimationSerial;
+    setState(() {
+      _eventTabAnimationTargetPage = targetPage;
+      _eventTabAnimationTargetTab = tabIndex;
+    });
+
+    _pageController
+        .animateToPage(
+          targetPage,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+        )
+        .whenComplete(
+          _completeCurrentAnimation(
+            serial: animationSerial,
+            currentSerial: () => _eventTabAnimationSerial,
+            updateState: () {
+              _pageIndex = targetPage;
+              _eventTabAnimationTargetPage = null;
+              _eventTabAnimationTargetTab = null;
+            },
+          ),
+        );
+  }
+
+  VoidCallback _completeCurrentAnimation({
+    required int serial,
+    required int Function() currentSerial,
+    required VoidCallback updateState,
+    VoidCallback? afterState,
+  }) {
+    return () {
+      if (!mounted || serial != currentSerial()) return;
+      setState(updateState);
+      afterState?.call();
+    };
+  }
+
+  void _handleEventPageChanged(int page) {
+    setState(() {
+      _pageIndex = page;
+      if (_eventTabAnimationTargetPage == null ||
+          page == _eventTabAnimationTargetPage) {
+        _eventTabAnimationTargetPage = null;
+        _eventTabAnimationTargetTab = null;
+      }
+    });
+  }
+
+  void _setCalendarSide(bool showQuadrant) {
+    if (_calendarFlipController.isAnimating) return;
+    if (showQuadrant == _visibleCalendarSideIsQuadrant) return;
+
+    final animationSerial = ++_calendarFlipSerial;
+    setState(() => _targetCalendarSideIsQuadrant = showQuadrant);
+
+    _calendarFlipController
+        .forward(from: 0)
+        .whenComplete(
+          _completeCurrentAnimation(
+            serial: animationSerial,
+            currentSerial: () => _calendarFlipSerial,
+            updateState: () {
+              _visibleCalendarSideIsQuadrant = showQuadrant;
+              _targetCalendarSideIsQuadrant = showQuadrant;
+            },
+            afterState: _calendarFlipController.reset,
+          ),
+        );
   }
 
   void _showComingSoon(String text) {
@@ -219,19 +308,19 @@ class _ArrangePageState extends State<ArrangePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: ArrangeStyle.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final eventHeight = (constraints.maxHeight * 0.35)
-                .clamp(220.0, 258.0)
-                .toDouble();
+            final metrics = ArrangeLayoutMetrics.forWidth(constraints.maxWidth);
+            final eventHeight = metrics.eventHeightFor(constraints.maxHeight);
+            final gap = metrics.compact ? 10.0 : 14.0;
             return Column(
               children: [
                 SizedBox(height: eventHeight, child: _buildEventBox()),
-                const SizedBox(height: 14),
-                Expanded(child: _buildCalendarBox()),
-                const SizedBox(height: 10),
+                SizedBox(height: gap),
+                Expanded(child: _buildCalendarBox(metrics)),
+                SizedBox(height: metrics.compact ? 10 : 14),
               ],
             );
           },
@@ -242,10 +331,10 @@ class _ArrangePageState extends State<ArrangePage> {
 
   Widget _buildEventBox() {
     return EventBox(
-      tabIndex: _tabIndex,
+      tabIndex: _displayTabIndex,
       pageController: _pageController,
       eventsForPage: _eventsForPage,
-      onPageChanged: (i) => setState(() => _pageIndex = i),
+      onPageChanged: _handleEventPageChanged,
       onTabTap: _goToTab,
       onBlankTap: _openInput,
       onOpen: _openDetail,
@@ -254,80 +343,113 @@ class _ArrangePageState extends State<ArrangePage> {
     );
   }
 
-  Widget _buildCalendarBox() {
-    return ArrangePanel(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: EdgeInsets.zero,
-      child: Stack(
-        children: [
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                child: CalendarTitle(
-                  title: _showQuadrant ? '四象限' : '日历',
-                  dateText: dateRangeTextForWeekOffset(_weekOffset),
-                  actionText: _showQuadrant ? '日历 >' : '四象限 >',
-                  onActionTap: () =>
-                      setState(() => _showQuadrant = !_showQuadrant),
-                ),
-              ),
-              Expanded(
-                child: _showQuadrant
-                    ? const QuadrantView()
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Stack(
-                            children: [
-                              PageView.builder(
-                                controller: _calendarPageController,
-                                itemCount: arrangePageCount,
-                                onPageChanged: (page) {
-                                  setState(() => _calendarPageIndex = page);
-                                },
-                                itemBuilder: (context, page) {
-                                  final weekOffset = page - initialCalendarPage;
-                                  return CalendarGrid(
-                                    monday: mondayForWeekOffset(weekOffset),
-                                    weekLabels: arrangeWeekLabels,
-                                    timeSlots: arrangeTimeSlots,
-                                    onBlankTap: () =>
-                                        _showComingSoon('日历详情页即将实现'),
-                                    eventsForCell: _eventsForCell,
-                                    onEventDrop: _dropEventToCell,
-                                    onEventTap: _openDetail,
-                                    onEventComplete: _completeEvent,
-                                  );
-                                },
-                              ),
-                              CalendarPageDivider(
-                                controller: _calendarPageController,
-                                pageIndex: _calendarPageIndex,
-                                width: constraints.maxWidth,
-                              ),
-                            ],
-                          );
-                        },
+  Widget _buildCalendarBox(ArrangeLayoutMetrics metrics) {
+    return AnimatedBuilder(
+      animation: _calendarFlipAnimation,
+      builder: (context, child) {
+        final value = _calendarFlipAnimation.value;
+        final animating = _calendarFlipController.isAnimating;
+        final firstHalf = !animating || value < 0.5;
+        final showQuadrant = firstHalf
+            ? _visibleCalendarSideIsQuadrant
+            : _targetCalendarSideIsQuadrant;
+        final angle = firstHalf
+            ? (math.pi / 2) * (value * 2)
+            : (-math.pi / 2) + (math.pi / 2) * ((value - 0.5) * 2);
+
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.001)
+            ..rotateY(angle),
+          child: ArrangePanel(
+            margin: EdgeInsets.symmetric(horizontal: metrics.horizontalMargin),
+            padding: EdgeInsets.zero,
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        metrics.compact ? 18 : 24,
+                        metrics.compact ? 4 : 6,
+                        metrics.compact ? 18 : 24,
+                        0,
                       ),
-              ),
-            ],
+                      child: CalendarTitle(
+                        title: showQuadrant ? '四象限' : '日历',
+                        dateText: dateRangeTextForWeekOffset(_weekOffset),
+                        actionText: showQuadrant ? '日历 >' : '四象限 >',
+                        onActionTap: () => _setCalendarSide(!showQuadrant),
+                      ),
+                    ),
+                    Expanded(
+                      child: showQuadrant
+                          ? QuadrantView(
+                              events: _inboxEvents,
+                              onEventTap: _openDetail,
+                            )
+                          : LayoutBuilder(
+                              builder: (context, constraints) {
+                                return Stack(
+                                  children: [
+                                    PageView.builder(
+                                      controller: _calendarPageController,
+                                      itemCount: arrangePageCount,
+                                      onPageChanged: (page) {
+                                        setState(
+                                          () => _calendarPageIndex = page,
+                                        );
+                                      },
+                                      itemBuilder: (context, page) {
+                                        final weekOffset =
+                                            page - initialCalendarPage;
+                                        return CalendarGrid(
+                                          monday: mondayForWeekOffset(
+                                            weekOffset,
+                                          ),
+                                          weekLabels: arrangeWeekLabels,
+                                          timeSlots: arrangeTimeSlots,
+                                          onBlankTap: () =>
+                                              _showComingSoon('日历详情页即将实现'),
+                                          eventsForCell: _eventsForCell,
+                                          onEventDrop: _dropEventToCell,
+                                          onEventTap: _openDetail,
+                                          onEventComplete: _completeEvent,
+                                        );
+                                      },
+                                    ),
+                                    CalendarPageDivider(
+                                      controller: _calendarPageController,
+                                      pageIndex: _calendarPageIndex,
+                                      width: constraints.maxWidth,
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+                if (!showQuadrant) _buildCalendarButtons(),
+              ],
+            ),
           ),
-          if (!_showQuadrant) _buildCalendarButtons(),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildCalendarButtons() {
     return Positioned(
-      right: 0,
-      bottom: 10,
+      right: 14,
+      bottom: 16,
       child: Row(
         children: [
           if (_weekOffset != 0) ...[
             RoundButton(
               icon: Icons.keyboard_return,
-              color: Colors.red.shade400,
+              color: ArrangeStyle.returnToToday,
               onTap: () {
                 _calendarPageController.animateToPage(
                   initialCalendarPage,
@@ -340,7 +462,7 @@ class _ArrangePageState extends State<ArrangePage> {
           ],
           RoundButton(
             icon: Icons.add,
-            color: Colors.grey.shade700,
+            color: ArrangeStyle.accent,
             onTap: _openInput,
           ),
         ],
