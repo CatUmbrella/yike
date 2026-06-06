@@ -18,6 +18,7 @@ class _EventInputScreenState extends State<EventInputScreen> {
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
   bool _exiting = false;
+  bool _changed = false;
 
   @override
   void initState() {
@@ -41,21 +42,22 @@ class _EventInputScreenState extends State<EventInputScreen> {
     if (_exiting) return;
     _exiting = true;
     FocusScope.of(context).unfocus();
-    final failedCount = await _controller.saveValidDrafts();
+    final result = await _controller.saveValidDrafts();
     if (!mounted) return;
-    if (failedCount > 0) {
+    if (result.failedCount > 0) {
       _exiting = false;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$failedCount 个事件保存失败，请稍后重试')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${result.failedCount} 个事件保存失败，请稍后重试')),
+      );
       return;
     }
-    Navigator.pop(context);
+    Navigator.pop(context, _changed || result.changed);
   }
 
   Future<void> _deleteDraft(int draftIndex) async {
     final deleted = await _controller.deleteDraft(draftIndex);
     if (!mounted || !deleted) return;
+    _changed = true;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('已删除事件')));
@@ -107,16 +109,16 @@ class _EventInputScreenState extends State<EventInputScreen> {
                     child: SizedBox(
                       width: contentWidth,
                       height: constraints.maxHeight,
-                      child: AnimatedBuilder(
-                        animation: _controller,
-                        builder: (context, _) {
-                          final state = _controller.state;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _NavigationHeader(onBack: () => _saveAndExit()),
-                              Expanded(
-                                child: Padding(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _NavigationHeader(onBack: () => _saveAndExit()),
+                          Expanded(
+                            child: AnimatedBuilder(
+                              animation: _controller,
+                              builder: (context, _) {
+                                final state = _controller.state;
+                                return Padding(
                                   padding: EdgeInsets.fromLTRB(
                                     metrics.horizontalPadding,
                                     metrics.isCompact ? 4 : 8,
@@ -172,23 +174,23 @@ class _EventInputScreenState extends State<EventInputScreen> {
                                       ),
                                     ],
                                   ),
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(
-                                  metrics.horizontalPadding,
-                                  metrics.isCompact ? 8 : 10,
-                                  metrics.horizontalPadding,
-                                  metrics.bottomPadding,
-                                ),
-                                child: EventInputActions(
-                                  onAddCustomEvent: _controller.addCustomEvent,
-                                  onVoiceInput: _showVoiceComingSoon,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
+                                );
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              metrics.horizontalPadding,
+                              metrics.isCompact ? 8 : 10,
+                              metrics.horizontalPadding,
+                              metrics.bottomPadding,
+                            ),
+                            child: EventInputActions(
+                              onAddCustomEvent: _controller.addCustomEvent,
+                              onVoiceInput: _showVoiceComingSoon,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

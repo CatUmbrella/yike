@@ -246,7 +246,7 @@ class ArrangeLayoutMetrics {
       eventPanelPaddingBottom: compact ? 6 : 8,
       eventCardHeight: compact ? 34 : 38,
       eventCardGap: compact ? 5 : 6,
-      eventTabHeight: compact ? 20 : 22,
+      eventTabHeight: compact ? 22 : 24,
       calendarTitleSize: compact ? 24 : 28,
       calendarHeaderHeight: compact ? 36 : 40,
       calendarGridBottomPadding: compact ? 3 : 4,

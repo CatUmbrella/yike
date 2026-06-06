@@ -2,21 +2,31 @@ class StepItem {
   int stepOrder;
   String description;
   int estimatedMin;
+  String? completedAt;
 
-  StepItem({this.stepOrder = 1, this.description = "", this.estimatedMin = 0});
+  StepItem({
+    this.stepOrder = 1,
+    this.description = "",
+    this.estimatedMin = 0,
+    this.completedAt,
+  });
 
   factory StepItem.fromJson(Map<String, dynamic> json) {
     return StepItem(
       stepOrder: json['step_order'] ?? 1,
       description: json['description'] ?? "",
       estimatedMin: json['estimated_min'] ?? 0,
+      completedAt: json['completed_at'],
     );
   }
+
+  bool get completed => completedAt != null && completedAt!.trim().isNotEmpty;
 
   Map<String, dynamic> toJson() => {
     'step_order': stepOrder,
     'description': description,
     'estimated_min': estimatedMin,
+    'completed_at': completedAt,
   };
 }
 
@@ -33,6 +43,8 @@ class Event {
   int calendarOrder;
   List<StepItem> steps;
   int? totalMinutesOverride;
+  int? actualMinutes;
+  int tomatoCount;
   String createdAt;
   String? completedAt;
   String? deletedAt;
@@ -50,6 +62,8 @@ class Event {
     this.calendarOrder = 0,
     List<StepItem>? steps,
     this.totalMinutesOverride,
+    this.actualMinutes,
+    this.tomatoCount = 0,
     String? createdAt,
     this.completedAt,
     this.deletedAt,
@@ -72,6 +86,8 @@ class Event {
       totalMinutesOverride: totalMinutes != null && totalMinutes > 0
           ? totalMinutes
           : null,
+      actualMinutes: _intFromJson(json['actual_minutes']),
+      tomatoCount: _intFromJson(json['tomato_count']) ?? 0,
       steps:
           (json['steps'] as List<dynamic>?)
               ?.map((s) => StepItem.fromJson(s))
@@ -99,6 +115,8 @@ class Event {
     'calendar_order': calendarOrder,
     'steps': steps.map((s) => s.toJson()).toList(),
     if (totalMinutesOverride != null) 'total_minutes': totalMinutesOverride,
+    if (actualMinutes != null) 'actual_minutes': actualMinutes,
+    'tomato_count': tomatoCount,
     'created_at': createdAt,
     'completed_at': completedAt,
     'deleted_at': deletedAt,
@@ -108,6 +126,10 @@ class Event {
   // total when the backend returns only aggregate duration.
   int get totalMinutes =>
       totalMinutesOverride ?? steps.fold(0, (sum, s) => sum + s.estimatedMin);
+
+  int get displayTotalMinutes => status == 'completed' && actualMinutes != null
+      ? actualMinutes!
+      : totalMinutes;
 }
 
 int? _intFromJson(Object? value) {

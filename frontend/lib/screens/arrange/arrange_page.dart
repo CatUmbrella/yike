@@ -3,22 +3,36 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../models/event.dart';
-import '../../services/database.dart';
 import '../event_detail.dart';
 import '../event_input.dart';
 import 'arrange_constants.dart';
+import 'arrange_controller.dart';
 import 'arrange_helpers.dart';
 import 'arrange_style.dart';
 import 'widgets/arrange_panel.dart';
 import 'widgets/calendar_grid.dart';
 import 'widgets/calendar_page_divider.dart';
 import 'widgets/calendar_title.dart';
+import 'widgets/draggable_add_button.dart';
 import 'widgets/event_box.dart';
 import 'widgets/quadrant_view.dart';
 import 'widgets/round_button.dart';
 
 class ArrangePage extends StatefulWidget {
-  const ArrangePage({super.key});
+  final bool active;
+  final int refreshToken;
+  final ValueChanged<bool>? onEventDragChanged;
+  final Offset? addButtonOffset;
+  final ValueChanged<Offset>? onAddButtonOffsetChanged;
+
+  const ArrangePage({
+    super.key,
+    this.active = true,
+    this.refreshToken = 0,
+    this.onEventDragChanged,
+    this.addButtonOffset,
+    this.onAddButtonOffsetChanged,
+  });
 
   @override
   State<ArrangePage> createState() => _ArrangePageState();
@@ -26,6 +40,7 @@ class ArrangePage extends StatefulWidget {
 
 class _ArrangePageState extends State<ArrangePage>
     with SingleTickerProviderStateMixin {
+  final _controller = ArrangeController();
   final _pageController = PageController(initialPage: initialEventPage);
   final _calendarPageController = PageController(
     initialPage: initialCalendarPage,
@@ -41,11 +56,6 @@ class _ArrangePageState extends State<ArrangePage>
   bool _visibleCalendarSideIsQuadrant = false;
   bool _targetCalendarSideIsQuadrant = false;
   int _calendarFlipSerial = 0;
-
-  List<Event> _inboxEvents = [];
-  List<Event> _calendarEvents = [];
-  List<Event> _completedEvents = [];
-  List<Event> _deletedEvents = [];
 
   int get _tabIndex => _pageIndex % 3;
 
@@ -64,59 +74,42 @@ class _ArrangePageState extends State<ArrangePage>
       parent: _calendarFlipController,
       curve: Curves.easeInOutCubic,
     );
-    _load();
+    _controller.load();
+  }
+
+  @override
+  void didUpdateWidget(covariant ArrangePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshToken != oldWidget.refreshToken ||
+        (!oldWidget.active && widget.active)) {
+      _controller.load();
+    }
   }
 
   @override
   void dispose() {
+    _controller.dispose();
     _pageController.dispose();
     _calendarPageController.dispose();
     _calendarFlipController.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    try {
-      final active = await LocalDatabase.getEvents();
-      final deleted = await LocalDatabase.getDeletedEvents();
-      if (!mounted) return;
-
-      setState(() {
-        _inboxEvents = active.where((e) => e.status != 'completed').toList();
-        _calendarEvents = active
-            .where((e) => e.scheduledDate != null && e.timeSlot != null)
-            .toList();
-        _completedEvents = active
-            .where((e) => e.status == 'completed')
-            .toList();
-        _deletedEvents = deleted;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _inboxEvents = [];
-        _calendarEvents = [];
-        _completedEvents = [];
-        _deletedEvents = [];
-      });
-    }
-  }
-
   Future<void> _openInput() async {
-    await Navigator.push(
+    final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const EventInputScreen()),
     );
-    _load();
+    if (changed == true) _controller.load();
   }
 
   Future<void> _openDetail(Event event) async {
     if (event.id == null) return;
-    await Navigator.push(
+    final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => EventDetailScreen(eventId: event.id!)),
     );
-    _load();
+    if (changed == true) _controller.load();
   }
 
   Future<void> _completeEvent(Event event) async {
@@ -139,16 +132,11 @@ class _ArrangePageState extends State<ArrangePage>
     );
 
     if (confirmed != true) return;
-    event.status = 'completed';
-    event.completedAt = DateTime.now().toIso8601String();
-    await LocalDatabase.saveEvent(event);
-    _load();
+    await _controller.markCompleted(event);
   }
 
   Future<void> _restoreEvent(Event event) async {
-    if (event.id == null) return;
-    await LocalDatabase.restoreEvent(event.id!);
-    _load();
+    await _controller.restoreEvent(event);
   }
 
   void _goToTab(int tabIndex) {
@@ -231,97 +219,43 @@ class _ArrangePageState extends State<ArrangePage>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  List<Event> _eventsForPage(int page) {
-    switch (page % 3) {
-      case 1:
-        return _completedEvents;
-      case 2:
-        return _deletedEvents;
-      default:
-        return _inboxEvents;
-    }
-  }
-
-  List<Event> _eventsForCell(DateTime day, ArrangeTimeSlot slot) {
-    return _eventsForCellByKey(dateKey(day), slot.key);
-  }
-
-  List<Event> _eventsForCellByKey(String date, String timeSlot) {
-    final events = _calendarEvents
-        .where((e) => e.scheduledDate == date && e.timeSlot == timeSlot)
-        .toList();
-    events.sort(compareCalendarEvents);
-    return events;
-  }
-
-  Future<void> _dropEventToCell(
-    Event event,
-    DateTime day,
-    ArrangeTimeSlot slot,
-    int insertIndex,
-  ) async {
-    final targetDate = dateKey(day);
-    final targetSlot = slot.key;
-    final sourceDate = event.scheduledDate;
-    final sourceSlot = event.timeSlot;
-    if (sourceDate == targetDate && sourceSlot == targetSlot) return;
-
-    final currentTargetEvents = _eventsForCellByKey(targetDate, targetSlot);
-    var targetIndex = insertIndex.clamp(0, currentTargetEvents.length).toInt();
-
-    final targetEvents = currentTargetEvents
-        .where((e) => e.id != event.id)
-        .toList();
-    targetIndex = targetIndex.clamp(0, targetEvents.length).toInt();
-
-    event.scheduledDate = targetDate;
-    event.timeSlot = targetSlot;
-    event.status = 'arranged';
-    targetEvents.insert(targetIndex, event);
-
-    if (sourceDate != null && sourceSlot != null) {
-      final sourceEvents = _eventsForCellByKey(
-        sourceDate,
-        sourceSlot,
-      ).where((e) => e.id != event.id).toList();
-      await _saveCellOrder(sourceEvents, sourceDate, sourceSlot);
-    }
-
-    await _saveCellOrder(targetEvents, targetDate, targetSlot);
-    await _load();
-  }
-
-  Future<void> _saveCellOrder(
-    List<Event> events,
-    String date,
-    String timeSlot,
-  ) async {
-    for (var i = 0; i < events.length; i++) {
-      final event = events[i];
-      event.scheduledDate = date;
-      event.timeSlot = timeSlot;
-      event.calendarOrder = i;
-      await LocalDatabase.saveEvent(event);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ArrangeStyle.background,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final metrics = ArrangeLayoutMetrics.forWidth(constraints.maxWidth);
-            final eventHeight = metrics.eventHeightFor(constraints.maxHeight);
-            final gap = metrics.compact ? 10.0 : 14.0;
-            return Column(
-              children: [
-                SizedBox(height: eventHeight, child: _buildEventBox()),
-                SizedBox(height: gap),
-                Expanded(child: _buildCalendarBox(metrics)),
-                SizedBox(height: metrics.compact ? 10 : 14),
-              ],
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final metrics = ArrangeLayoutMetrics.forWidth(
+                  constraints.maxWidth,
+                );
+                final eventHeight = metrics.eventHeightFor(
+                  constraints.maxHeight,
+                );
+                final gap = metrics.compact ? 10.0 : 14.0;
+                return Stack(
+                  children: [
+                    Column(
+                      children: [
+                        SizedBox(height: eventHeight, child: _buildEventBox()),
+                        SizedBox(height: gap),
+                        Expanded(child: _buildCalendarBox(metrics)),
+                        SizedBox(height: metrics.compact ? 10 : 14),
+                      ],
+                    ),
+                    DraggableAddButton(
+                      constraints: constraints,
+                      offset: widget.addButtonOffset,
+                      onOffsetChanged:
+                          widget.onAddButtonOffsetChanged ?? (_) {},
+                      onTap: _openInput,
+                    ),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -333,17 +267,22 @@ class _ArrangePageState extends State<ArrangePage>
     return EventBox(
       tabIndex: _displayTabIndex,
       pageController: _pageController,
-      eventsForPage: _eventsForPage,
+      eventsForPage: _controller.eventsForPage,
       onPageChanged: _handleEventPageChanged,
       onTabTap: _goToTab,
       onBlankTap: _openInput,
       onOpen: _openDetail,
       onComplete: _completeEvent,
       onRestore: _restoreEvent,
+      onEventDragStarted: () => widget.onEventDragChanged?.call(true),
+      onEventDragEnded: () => widget.onEventDragChanged?.call(false),
     );
   }
 
   Widget _buildCalendarBox(ArrangeLayoutMetrics metrics) {
+    final calendarFace = _buildCalendarPanel(metrics, showQuadrant: false);
+    final quadrantFace = _buildCalendarPanel(metrics, showQuadrant: true);
+
     return AnimatedBuilder(
       animation: _calendarFlipAnimation,
       builder: (context, child) {
@@ -362,111 +301,118 @@ class _ArrangePageState extends State<ArrangePage>
           transform: Matrix4.identity()
             ..setEntry(3, 2, 0.001)
             ..rotateY(angle),
-          child: ArrangePanel(
-            margin: EdgeInsets.symmetric(horizontal: metrics.horizontalMargin),
-            padding: EdgeInsets.zero,
-            child: Stack(
-              children: [
-                Column(
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        metrics.compact ? 18 : 24,
-                        metrics.compact ? 4 : 6,
-                        metrics.compact ? 18 : 24,
-                        0,
-                      ),
-                      child: CalendarTitle(
-                        title: showQuadrant ? '四象限' : '日历',
-                        dateText: dateRangeTextForWeekOffset(_weekOffset),
-                        actionText: showQuadrant ? '日历 >' : '四象限 >',
-                        onActionTap: () => _setCalendarSide(!showQuadrant),
-                      ),
-                    ),
-                    Expanded(
-                      child: showQuadrant
-                          ? QuadrantView(
-                              events: _inboxEvents,
-                              onEventTap: _openDetail,
-                            )
-                          : LayoutBuilder(
-                              builder: (context, constraints) {
-                                return Stack(
-                                  children: [
-                                    PageView.builder(
-                                      controller: _calendarPageController,
-                                      itemCount: arrangePageCount,
-                                      onPageChanged: (page) {
-                                        setState(
-                                          () => _calendarPageIndex = page,
-                                        );
-                                      },
-                                      itemBuilder: (context, page) {
-                                        final weekOffset =
-                                            page - initialCalendarPage;
-                                        return CalendarGrid(
-                                          monday: mondayForWeekOffset(
-                                            weekOffset,
-                                          ),
-                                          weekLabels: arrangeWeekLabels,
-                                          timeSlots: arrangeTimeSlots,
-                                          onBlankTap: () =>
-                                              _showComingSoon('日历详情页即将实现'),
-                                          eventsForCell: _eventsForCell,
-                                          onEventDrop: _dropEventToCell,
-                                          onEventTap: _openDetail,
-                                          onEventComplete: _completeEvent,
-                                        );
-                                      },
-                                    ),
-                                    CalendarPageDivider(
-                                      controller: _calendarPageController,
-                                      pageIndex: _calendarPageIndex,
-                                      width: constraints.maxWidth,
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-                if (!showQuadrant) _buildCalendarButtons(),
-              ],
-            ),
+          child: IndexedStack(
+            index: showQuadrant ? 1 : 0,
+            children: [calendarFace, quadrantFace],
           ),
         );
       },
     );
   }
 
-  Widget _buildCalendarButtons() {
-    return Positioned(
-      right: 14,
-      bottom: 16,
-      child: Row(
+  Widget _buildCalendarPanel(
+    ArrangeLayoutMetrics metrics, {
+    required bool showQuadrant,
+  }) {
+    return ArrangePanel(
+      margin: EdgeInsets.symmetric(horizontal: metrics.horizontalMargin),
+      padding: EdgeInsets.zero,
+      child: Stack(
         children: [
-          if (_weekOffset != 0) ...[
-            RoundButton(
-              icon: Icons.keyboard_return,
-              color: ArrangeStyle.returnToToday,
-              onTap: () {
-                _calendarPageController.animateToPage(
-                  initialCalendarPage,
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOut,
-                );
-              },
-            ),
-            const SizedBox(width: 8),
-          ],
-          RoundButton(
-            icon: Icons.add,
-            color: ArrangeStyle.accent,
-            onTap: _openInput,
+          Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.compact ? 18 : 24,
+                  metrics.compact ? 4 : 6,
+                  metrics.compact ? 18 : 24,
+                  0,
+                ),
+                child: CalendarTitle(
+                  title: showQuadrant ? '四象限' : '日历',
+                  dateText: dateRangeTextForWeekOffset(_weekOffset),
+                  actionText: showQuadrant ? '日历 >' : '四象限 >',
+                  onActionTap: () => _setCalendarSide(!showQuadrant),
+                ),
+              ),
+              Expanded(
+                child: showQuadrant
+                    ? QuadrantView(
+                        events: _controller.inboxEvents,
+                        onEventTap: _openDetail,
+                        onEventDrop: _controller.dropEventToQuadrant,
+                      )
+                    : _buildCalendarGrid(),
+              ),
+            ],
           ),
+          if (!showQuadrant && _weekOffset != 0)
+            _buildReturnToTodayButton(metrics),
         ],
       ),
     );
+  }
+
+  Widget _buildCalendarGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          children: [
+            PageView.builder(
+              controller: _calendarPageController,
+              itemCount: arrangePageCount,
+              onPageChanged: (page) {
+                setState(() => _calendarPageIndex = page);
+              },
+              itemBuilder: (context, page) {
+                final weekOffset = page - initialCalendarPage;
+                return CalendarGrid(
+                  monday: mondayForWeekOffset(weekOffset),
+                  weekLabels: arrangeWeekLabels,
+                  timeSlots: arrangeTimeSlots,
+                  onBlankTap: () => _showComingSoon('日历详情页即将实现'),
+                  eventsForCell: _controller.eventsForCell,
+                  onEventDrop: _controller.dropEventToCell,
+                  onEventTap: _openDetail,
+                  onEventComplete: _completeEvent,
+                  onEventDragStarted: () =>
+                      widget.onEventDragChanged?.call(true),
+                  onEventDragEnded: () =>
+                      widget.onEventDragChanged?.call(false),
+                );
+              },
+            ),
+            CalendarPageDivider(
+              controller: _calendarPageController,
+              pageIndex: _calendarPageIndex,
+              width: constraints.maxWidth,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildReturnToTodayButton(ArrangeLayoutMetrics metrics) {
+    final buttonSize = _floatingButtonSize(metrics);
+    return Positioned(
+      right: 14 + buttonSize + 8,
+      bottom: 16,
+      child: RoundButton(
+        icon: Icons.keyboard_return,
+        color: ArrangeStyle.returnToToday,
+        onTap: () {
+          _calendarPageController.animateToPage(
+            initialCalendarPage,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOut,
+          );
+        },
+      ),
+    );
+  }
+
+  double _floatingButtonSize(ArrangeLayoutMetrics metrics) {
+    return metrics.compact ? 54.0 : 62.0;
   }
 }

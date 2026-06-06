@@ -82,10 +82,13 @@ Event cloneEvent(Event source) {
             stepOrder: step.stepOrder,
             description: step.description,
             estimatedMin: step.estimatedMin,
+            completedAt: step.completedAt,
           ),
         )
         .toList(),
     createdAt: source.createdAt,
+    actualMinutes: source.actualMinutes,
+    tomatoCount: source.tomatoCount,
     completedAt: source.completedAt,
     deletedAt: source.deletedAt,
   );

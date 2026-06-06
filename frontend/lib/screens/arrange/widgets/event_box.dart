@@ -16,6 +16,8 @@ class EventBox extends StatelessWidget {
   final ValueChanged<Event> onOpen;
   final ValueChanged<Event> onComplete;
   final ValueChanged<Event> onRestore;
+  final VoidCallback? onEventDragStarted;
+  final VoidCallback? onEventDragEnded;
 
   const EventBox({
     super.key,
@@ -28,6 +30,8 @@ class EventBox extends StatelessWidget {
     required this.onOpen,
     required this.onComplete,
     required this.onRestore,
+    this.onEventDragStarted,
+    this.onEventDragEnded,
   });
 
   @override
@@ -89,6 +93,8 @@ class EventBox extends StatelessWidget {
                   onOpen: onOpen,
                   onComplete: onComplete,
                   onRestore: onRestore,
+                  onEventDragStarted: onEventDragStarted,
+                  onEventDragEnded: onEventDragEnded,
                 );
               },
             ),
@@ -115,6 +121,8 @@ class _EventList extends StatelessWidget {
   final ValueChanged<Event> onOpen;
   final ValueChanged<Event> onComplete;
   final ValueChanged<Event> onRestore;
+  final VoidCallback? onEventDragStarted;
+  final VoidCallback? onEventDragEnded;
 
   const _EventList({
     required this.events,
@@ -126,6 +134,8 @@ class _EventList extends StatelessWidget {
     required this.onOpen,
     required this.onComplete,
     required this.onRestore,
+    this.onEventDragStarted,
+    this.onEventDragEnded,
   });
 
   @override
@@ -163,8 +173,9 @@ class _EventList extends StatelessWidget {
             canDrag: canDrag && event.status != 'completed',
             onTap: isDeleted ? null : () => onOpen(event),
             onDoubleTap: canComplete ? () => onComplete(event) : null,
-            onDragCanceled: () => onOpen(event),
             onRestore: isDeleted ? () => onRestore(event) : null,
+            onDragStarted: onEventDragStarted,
+            onDragEnded: onEventDragEnded,
           );
         },
       ),
@@ -197,7 +208,7 @@ class _EventBoxTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final metrics = ArrangeLayoutMetrics.forWidth(width);
-    final segmentWidth = (width * 0.5).clamp(156.0, 210.0).toDouble();
+    final segmentWidth = (width * 0.54).clamp(168.0, 224.0).toDouble();
     final height = metrics.eventTabHeight;
 
     return Row(
@@ -214,39 +225,60 @@ class _EventBoxTabs extends StatelessWidget {
             color: ArrangeStyle.accentSofter,
             borderRadius: BorderRadius.circular(height / 2),
           ),
-          child: Row(
-            children: List.generate(tabs.length, (i) {
-              final selected = i == selectedIndex;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onTap(i),
-                  child: Container(
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? ArrangeStyle.accentSoft
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(height / 2),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        tabs[i],
-                        style: TextStyle(
-                          fontSize: metrics.compact ? 10 : 11,
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: selected
-                              ? ArrangeStyle.accent
-                              : ArrangeStyle.textPrimary,
-                        ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth / tabs.length;
+              return Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    left: itemWidth * selectedIndex,
+                    width: itemWidth,
+                    height: height - 3,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: ArrangeStyle.accentSoft,
+                        borderRadius: BorderRadius.circular(height / 2),
                       ),
                     ),
                   ),
-                ),
+                  Row(
+                    children: List.generate(tabs.length, (i) {
+                      final selected = i == selectedIndex;
+                      return Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            if (selectedIndex == i) return;
+                            onTap(i);
+                          },
+                          child: SizedBox(
+                            height: height,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                tabs[i],
+                                style: TextStyle(
+                                  fontSize: metrics.compact ? 10 : 11,
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: selected
+                                      ? ArrangeStyle.accent
+                                      : ArrangeStyle.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
               );
-            }),
+            },
           ),
         ),
         Expanded(

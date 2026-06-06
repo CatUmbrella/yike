@@ -3,8 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/event.dart';
 import '../../services/api.dart';
 import '../../services/database.dart';
-import '../arrange/arrange_constants.dart';
-import '../arrange/arrange_helpers.dart';
+import '../../shared/event_schedule.dart';
 import 'event_draft.dart';
 import 'event_input_state.dart';
 
@@ -113,9 +112,10 @@ class EventInputController extends ChangeNotifier {
     );
   }
 
-  Future<int> saveValidDrafts() async {
+  Future<SaveDraftsResult> saveValidDrafts() async {
     _parseRunId++;
     var failedCount = 0;
+    var savedCount = 0;
 
     for (final draft in _state.drafts) {
       final event = draft.event;
@@ -130,12 +130,13 @@ class EventInputController extends ChangeNotifier {
 
       try {
         await LocalDatabase.saveEvent(event);
+        savedCount++;
       } catch (_) {
         failedCount++;
       }
     }
 
-    return failedCount;
+    return SaveDraftsResult(failedCount: failedCount, savedCount: savedCount);
   }
 
   void updateTitle(int draftIndex, String value) {
@@ -312,4 +313,13 @@ class EventInputController extends ChangeNotifier {
     _state = value;
     notifyListeners();
   }
+}
+
+class SaveDraftsResult {
+  final int failedCount;
+  final int savedCount;
+
+  const SaveDraftsResult({required this.failedCount, required this.savedCount});
+
+  bool get changed => savedCount > 0;
 }

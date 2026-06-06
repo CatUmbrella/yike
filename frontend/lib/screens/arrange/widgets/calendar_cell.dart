@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/event.dart';
+import '../../../shared/event_formatters.dart';
 import '../arrange_constants.dart';
 import '../arrange_style.dart';
 import 'calendar_grid_cell.dart';
@@ -12,6 +13,8 @@ class CalendarCell extends StatefulWidget {
   final Future<void> Function(Event event, int insertIndex) onEventDrop;
   final ValueChanged<Event> onEventTap;
   final ValueChanged<Event> onEventComplete;
+  final VoidCallback? onEventDragStarted;
+  final VoidCallback? onEventDragEnded;
 
   const CalendarCell({
     super.key,
@@ -21,6 +24,8 @@ class CalendarCell extends StatefulWidget {
     required this.onEventDrop,
     required this.onEventTap,
     required this.onEventComplete,
+    this.onEventDragStarted,
+    this.onEventDragEnded,
   });
 
   @override
@@ -70,6 +75,8 @@ class _CalendarCellState extends State<CalendarCell> {
                       onDoubleTap: event.status == 'completed'
                           ? null
                           : () => widget.onEventComplete(event),
+                      onDragStarted: widget.onEventDragStarted,
+                      onDragEnded: widget.onEventDragEnded,
                     );
                   }).toList(),
                 );
@@ -107,11 +114,15 @@ class _CalendarEventChip extends StatelessWidget {
   final Event event;
   final VoidCallback onTap;
   final VoidCallback? onDoubleTap;
+  final VoidCallback? onDragStarted;
+  final VoidCallback? onDragEnded;
 
   const _CalendarEventChip({
     required this.event,
     required this.onTap,
     this.onDoubleTap,
+    this.onDragStarted,
+    this.onDragEnded,
   });
 
   @override
@@ -149,6 +160,8 @@ class _CalendarEventChip extends StatelessWidget {
         ),
       ),
       childWhenDragging: _buildChip(opacity: 0.32),
+      onDragStarted: onDragStarted,
+      onDragEnd: (_) => onDragEnded?.call(),
       child: child,
     );
   }
@@ -175,7 +188,7 @@ class _CalendarEventChip extends StatelessWidget {
           boxShadow: completed ? null : ArrangeStyle.itemShadow,
         ),
         child: Text(
-          _eventDisplayName(event),
+          eventDisplayTitle(event),
           maxLines: 2,
           softWrap: true,
           overflow: TextOverflow.ellipsis,
@@ -189,12 +202,5 @@ class _CalendarEventChip extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _eventDisplayName(Event event) {
-    final summary = event.summary.trim();
-    if (summary.isNotEmpty) return summary;
-    final title = event.title.trim();
-    return title.isEmpty ? '(无标题)' : title;
   }
 }

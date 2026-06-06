@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/event.dart';
+import '../../../shared/event_formatters.dart';
 import '../arrange_constants.dart';
 import '../arrange_helpers.dart';
 import '../arrange_style.dart';
@@ -13,6 +14,8 @@ class EventCard extends StatelessWidget {
   final VoidCallback? onDoubleTap;
   final VoidCallback? onDragCanceled;
   final VoidCallback? onRestore;
+  final VoidCallback? onDragStarted;
+  final VoidCallback? onDragEnded;
 
   const EventCard({
     super.key,
@@ -23,6 +26,8 @@ class EventCard extends StatelessWidget {
     this.onDoubleTap,
     this.onDragCanceled,
     this.onRestore,
+    this.onDragStarted,
+    this.onDragEnded,
   });
 
   @override
@@ -48,6 +53,8 @@ class EventCard extends StatelessWidget {
         ),
       ),
       childWhenDragging: _buildCard(opacity: 0.32, metrics: metrics),
+      onDragStarted: onDragStarted,
+      onDragEnd: (_) => onDragEnded?.call(),
       onDraggableCanceled: (_, _) => onDragCanceled?.call(),
       child: card,
     );
@@ -85,7 +92,7 @@ class EventCard extends StatelessWidget {
               SizedBox(width: metrics.compact ? 10 : 14),
               Expanded(
                 child: Text(
-                  event.title.isEmpty ? '(无标题)' : event.title,
+                  eventDisplayTitle(event),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -198,7 +205,7 @@ class _EventDragFeedback extends StatelessWidget {
                 SizedBox(width: dotGap),
                 Expanded(
                   child: Text(
-                    event.summary.isNotEmpty ? event.summary : event.title,
+                    eventDisplayTitle(event),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
