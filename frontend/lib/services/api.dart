@@ -10,13 +10,19 @@ class ApiService {
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8000/api',
   );
+  static const String _apiToken = String.fromEnvironment('API_TOKEN');
+
+  static Map<String, String> get _jsonHeaders => {
+    'Content-Type': 'application/json',
+    if (_apiToken.isNotEmpty) 'X-API-Key': _apiToken,
+  };
 
   static Future<ParseEventResult> parseEventText(String text) async {
     try {
       final response = await http
           .post(
             Uri.parse('$_baseUrl/events/parse'),
-            headers: {'Content-Type': 'application/json'},
+            headers: _jsonHeaders,
             body: jsonEncode({'text': text}),
           )
           .timeout(const Duration(seconds: 20));
@@ -45,7 +51,7 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/events'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _jsonHeaders,
         body: jsonEncode(event.toJson()),
       );
 

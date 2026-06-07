@@ -4,12 +4,17 @@ from sqlalchemy.orm import Session
 from services.ai_parser import parse_event_text
 from models import ParseRequest, ParseResponse
 
+from auth import require_api_token
 from database import get_db
 from models import Event, Step, EventCreate, EventResponse, StepItem
 
 from datetime import datetime
 
-router =APIRouter(prefix="/api/events", tags=["events"])
+router = APIRouter(
+    prefix="/api/events",
+    tags=["events"],
+    dependencies=[Depends(require_api_token)],
+)
 
 @router.post("/parse",response_model=ParseResponse)
 def parse_event_text_api(req: ParseRequest):

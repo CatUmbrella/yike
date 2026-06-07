@@ -17,6 +17,7 @@ DATABASE_URL = os.getenv(
 )
 
 CORS_ORIGINS = _split_csv(os.getenv("CORS_ORIGINS", "*"))
+API_TOKEN = os.getenv("API_TOKEN", "")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.deepseek.com")
