@@ -1,7 +1,8 @@
 import json
-import os
 
 from openai import OpenAI
+
+from config import AI_BASE_URL, AI_MODEL, OPENAI_API_KEY
 
 #提示词
 SYSTEM_PROMPT = """你是一个任务拆解助手。用户输入一段文字，你将其拆解为结构化的事件信息。
@@ -36,13 +37,16 @@ SYSTEM_PROMPT = """你是一个任务拆解助手。用户输入一段文字，�
 - title 和 summary 用中文"""
 
 def parse_event_text(text: str) -> dict:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+
     client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url="https://api.deepseek.com"
+        api_key=OPENAI_API_KEY,
+        base_url=AI_BASE_URL,
     )
 
     response = client.chat.completions.create(
-        model = "deepseek-v4-flash",
+        model=AI_MODEL,
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": text},
