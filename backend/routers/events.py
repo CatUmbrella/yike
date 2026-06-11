@@ -1,3 +1,7 @@
+import logging
+import time
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -8,18 +12,38 @@ from auth import require_api_token
 from database import get_db
 from models import Event, Step, EventCreate, EventResponse, StepItem
 
-from datetime import datetime
-
 router = APIRouter(
     prefix="/api/events",
     tags=["events"],
     dependencies=[Depends(require_api_token)],
 )
+logger = logging.getLogger("yike.events")
 
 @router.post("/parse",response_model=ParseResponse)
 def parse_event_text_api(req: ParseRequest):
-    result = parse_event_text(req.text)
-    return ParseResponse(**result)
+    started = time.perf_counter()
+    text_len = len(req.text or "")
+    logger.info("parse_event.start text_len=%s", text_len)
+    try:
+        result = parse_event_text(req.text)
+        events_count = len(result.get("events") or [])
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "parse_event.success elapsed_ms=%s text_len=%s events=%s",
+            elapsed_ms,
+            text_len,
+            events_count,
+        )
+        return ParseResponse(**result)
+    except Exception as exc:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        logger.exception(
+            "parse_event.failure elapsed_ms=%s text_len=%s error_type=%s",
+            elapsed_ms,
+            text_len,
+            type(exc).__name__,
+        )
+        raise
 
 @router.post("",response_model=EventResponse)
 def create_event(req:EventCreate,db: Session = Depends(get_db)):

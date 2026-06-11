@@ -1,9 +1,17 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import CORS_ORIGINS
+from config import CORS_ORIGINS, LOG_LEVEL
 from database import init_db
 from routers import events
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logging.getLogger("yike").setLevel(LOG_LEVEL)
 
 app = FastAPI(title="一刻 API", version="0.1.0")
 
