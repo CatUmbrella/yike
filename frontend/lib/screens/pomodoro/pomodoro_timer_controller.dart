@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../models/event.dart';
-import 'pomodoro_constants.dart';
-import 'pomodoro_models.dart';
-import 'pomodoro_repository.dart';
+import '../../models/pomodoro_models.dart';
+import '../../repositories/pomodoro_repository.dart';
+import '../../shared/pomodoro_constants.dart';
 
 class PomodoroTimerController extends ChangeNotifier {
   PomodoroTimerController({PomodoroRepository? repository})
@@ -145,6 +145,14 @@ class PomodoroTimerController extends ChangeNotifier {
         ? session.durationSec - (_lastCompletedElapsedSec ?? 0)
         : null;
     final recordedDurationSec = durationSec?.clamp(0, 999999).toInt();
+    var eventStepChanged = false;
+    final completedAtText = now.toIso8601String();
+    for (final step in current.event.steps) {
+      if (step.stepOrder != stepOrder || step.completed) continue;
+      step.completedAt = completedAtText;
+      eventStepChanged = true;
+      break;
+    }
     final records = current.stepRecords.map((record) {
       if (record.stepOrder != stepOrder || record.completed) return record;
       return record.copyWith(
@@ -157,7 +165,7 @@ class PomodoroTimerController extends ChangeNotifier {
     _lastCompletedStepOrder = stepOrder;
     _lastCompletedElapsedSec = session.durationSec;
     snapshot = _copySnapshot(current, stepRecords: records);
-    _saveCurrentSnapshot(includeRecords: true);
+    _saveCurrentSnapshot(includeRecords: true, saveEvent: eventStepChanged);
     notifyListeners();
   }
 

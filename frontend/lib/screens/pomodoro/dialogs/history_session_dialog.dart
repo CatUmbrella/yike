@@ -3,8 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../../../shared/event_formatters.dart';
 import '../../event_input/widgets/event_duration_picker_sheet.dart';
-import '../pomodoro_constants.dart';
-import '../pomodoro_models.dart';
+import '../../../models/pomodoro_models.dart';
+import '../../../shared/pomodoro_constants.dart';
 import '../pomodoro_style.dart';
 import '../widgets/tomato_icon.dart';
 
@@ -15,7 +15,11 @@ Future<bool?> showHistorySessionDialog({
   return showDialog<bool>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.18),
-    builder: (context) => _HistorySessionCard(detail: detail),
+    builder: (context) => MediaQuery.removeViewInsets(
+      context: context,
+      removeBottom: true,
+      child: _HistorySessionCard(detail: detail),
+    ),
   );
 }
 
@@ -57,86 +61,94 @@ class _HistorySessionCardState extends State<_HistorySessionCard> {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 460,
-          maxHeight: screenHeight * 0.86,
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: PomodoroStyle.surface.withValues(alpha: 0.96),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.78)),
-            boxShadow: [
-              BoxShadow(
-                color: PomodoroStyle.accent.withValues(alpha: 0.12),
-                blurRadius: 32,
-                offset: const Offset(0, 14),
-              ),
-            ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _dismissKeyboard,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 460,
+            maxHeight: screenHeight * 0.86,
           ),
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 22, 18, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _Header(detail: detail),
-                      if (detail.event.purpose.trim().isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        _Purpose(text: detail.event.purpose.trim()),
-                      ],
-                      if (detail.event.steps.isNotEmpty) ...[
+          child: Container(
+            decoration: BoxDecoration(
+              color: PomodoroStyle.surface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.78)),
+              boxShadow: [
+                BoxShadow(
+                  color: PomodoroStyle.accent.withValues(alpha: 0.12),
+                  blurRadius: 32,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(18, 22, 18, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _Header(detail: detail),
+                        if (detail.event.purpose.trim().isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          _Purpose(text: detail.event.purpose.trim()),
+                        ],
+                        if (detail.event.steps.isNotEmpty) ...[
+                          const SizedBox(height: 22),
+                          const _SectionTitle('怎么做:'),
+                          const SizedBox(height: 10),
+                          _StepList(
+                            stepOrders: detail.event.steps
+                                .map((step) => step.stepOrder)
+                                .toList(),
+                            stepRecords: detail.stepRecords,
+                            controllers: _stepControllers,
+                            minutes: _stepMinutes,
+                            onDurationTap: _editStepDuration,
+                          ),
+                        ],
                         const SizedBox(height: 22),
-                        const _SectionTitle('怎么做:'),
-                        const SizedBox(height: 10),
-                        _StepList(
-                          controllers: _stepControllers,
-                          minutes: _stepMinutes,
-                          onDurationTap: _editStepDuration,
+                        _SessionSummary(detail: detail),
+                        const SizedBox(height: 24),
+                        _RecordSection(
+                          title: '打断:',
+                          emptyText: '暂无打断',
+                          children: detail.interruptions
+                              .map(
+                                (item) => _TimedRecordRow(
+                                  text: item.reason,
+                                  elapsedSec: item.elapsedSec,
+                                  createdAt: item.createdAt,
+                                ),
+                              )
+                              .toList(),
+                        ),
+                        const SizedBox(height: 24),
+                        _RecordSection(
+                          title: '想法:',
+                          emptyText: '暂无想法',
+                          children: detail.ideas
+                              .map(
+                                (item) => _TimedRecordRow(
+                                  text: item.content,
+                                  elapsedSec: item.elapsedSec,
+                                  createdAt: item.createdAt,
+                                ),
+                              )
+                              .toList(),
                         ),
                       ],
-                      const SizedBox(height: 22),
-                      _SessionSummary(detail: detail),
-                      const SizedBox(height: 24),
-                      _RecordSection(
-                        title: '打断:',
-                        emptyText: '暂无打断',
-                        children: detail.interruptions
-                            .map(
-                              (item) => _TimedRecordRow(
-                                text: item.reason,
-                                elapsedSec: item.elapsedSec,
-                                createdAt: item.createdAt,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: 24),
-                      _RecordSection(
-                        title: '想法:',
-                        emptyText: '暂无想法',
-                        children: detail.ideas
-                            .map(
-                              (item) => _TimedRecordRow(
-                                text: item.content,
-                                elapsedSec: item.elapsedSec,
-                                createdAt: item.createdAt,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
-                child: _CloseButton(onTap: _close),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
+                  child: _CloseButton(onTap: _close),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -144,6 +156,7 @@ class _HistorySessionCardState extends State<_HistorySessionCard> {
   }
 
   Future<void> _editStepDuration(int index) async {
+    _dismissKeyboard();
     final selected = await showEventDurationPickerSheet(
       context: context,
       initialMinutes: _stepMinutes[index],
@@ -167,6 +180,10 @@ class _HistorySessionCardState extends State<_HistorySessionCard> {
       }
     }
     Navigator.pop(context, changed);
+  }
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 }
 
@@ -294,23 +311,31 @@ class _SectionTitle extends StatelessWidget {
 
 class _StepList extends StatelessWidget {
   const _StepList({
+    required this.stepOrders,
+    required this.stepRecords,
     required this.controllers,
     required this.minutes,
     required this.onDurationTap,
   });
 
+  final List<int> stepOrders;
+  final List<PomodoroStepRecord> stepRecords;
   final List<TextEditingController> controllers;
   final List<int> minutes;
   final ValueChanged<int> onDurationTap;
 
   @override
   Widget build(BuildContext context) {
+    final recordsByOrder = {
+      for (final record in stepRecords) record.stepOrder: record,
+    };
     return Column(
       children: List.generate(
         controllers.length,
         (index) => _StepRow(
           index: index,
           isLast: index == controllers.length - 1,
+          record: recordsByOrder[stepOrders[index]],
           controller: controllers[index],
           minutes: minutes[index],
           onDurationTap: () => onDurationTap(index),
@@ -324,6 +349,7 @@ class _StepRow extends StatelessWidget {
   const _StepRow({
     required this.index,
     required this.isLast,
+    required this.record,
     required this.controller,
     required this.minutes,
     required this.onDurationTap,
@@ -331,28 +357,42 @@ class _StepRow extends StatelessWidget {
 
   final int index;
   final bool isLast;
+  final PomodoroStepRecord? record;
   final TextEditingController controller;
   final int minutes;
   final VoidCallback onDurationTap;
 
   @override
   Widget build(BuildContext context) {
+    final actualDurationSec = record?.durationSec;
+    final hasActualDuration = actualDurationSec != null;
+    final displayMinutes = hasActualDuration
+        ? _minutesFromSeconds(actualDurationSec)
+        : minutes;
+    final completed = record?.completed ?? false;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 28,
-          height: 54,
+          width: 32,
+          height: 58,
           child: Stack(
             alignment: Alignment.topCenter,
             children: [
               if (!isLast)
                 Positioned(
-                  top: 17,
-                  bottom: -4,
-                  child: Container(width: 1.4, color: const Color(0xFFBDD5FF)),
+                  top: 32,
+                  bottom: -2,
+                  child: Container(width: 1, color: const Color(0xFFD8E6F8)),
                 ),
-              const Positioned(top: 7, child: _BlueDot(size: 10)),
+              Positioned(
+                top: 5,
+                child: _StepIndexCircle(
+                  number: index + 1,
+                  completed: completed,
+                ),
+              ),
             ],
           ),
         ),
@@ -362,27 +402,17 @@ class _StepRow extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    '第${index + 1}步:',
-                    style: const TextStyle(
-                      color: PomodoroStyle.textPrimary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: controller,
+                    onTapOutside: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
                     minLines: 1,
                     maxLines: 3,
                     style: const TextStyle(
                       color: PomodoroStyle.textPrimary,
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                     decoration: const InputDecoration(
                       isDense: true,
@@ -400,27 +430,102 @@ class _StepRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                TextButton(
-                  onPressed: onDurationTap,
-                  style: TextButton.styleFrom(
-                    foregroundColor: PomodoroStyle.accentDeep,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: const Size(74, 34),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    '预计耗时： ${_formatMinutes(minutes)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                _StepDurationLabel(
+                  label: hasActualDuration ? '实际用时：' : '预计耗时：',
+                  minutes: displayMinutes,
+                  onTap: hasActualDuration ? null : onDurationTap,
                 ),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StepIndexCircle extends StatelessWidget {
+  const _StepIndexCircle({required this.number, required this.completed});
+
+  final int number;
+  final bool completed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = completed ? PomodoroStyle.textSecondary : Colors.white;
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: completed ? Colors.transparent : PomodoroStyle.accent,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: completed ? const Color(0xFFB8C4D4) : PomodoroStyle.accent,
+          width: 1.4,
+        ),
+      ),
+      child: Text(
+        '$number',
+        style: TextStyle(
+          color: foreground,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _StepDurationLabel extends StatelessWidget {
+  const _StepDurationLabel({
+    required this.label,
+    required this.minutes,
+    required this.onTap,
+  });
+
+  final String label;
+  final int minutes;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = SizedBox(
+      width: 112,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: FittedBox(
+          alignment: Alignment.centerRight,
+          fit: BoxFit.scaleDown,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: label),
+                TextSpan(
+                  text: _formatMinutes(minutes),
+                  style: const TextStyle(
+                    color: PomodoroStyle.accentDeep,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            style: const TextStyle(
+              color: PomodoroStyle.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (onTap == null) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: child,
     );
   }
 }
@@ -659,11 +764,12 @@ class _CloseButton extends StatelessWidget {
 
 String _formatMinutes(int minutes) {
   final safeMinutes = minutes.clamp(0, 9999);
-  final hours = safeMinutes ~/ 60;
-  final rest = safeMinutes % 60;
-  if (hours <= 0) return '${rest}min';
-  if (rest == 0) return '${hours}h';
-  return '${hours}h${rest}min';
+  return formatEventDuration(safeMinutes);
+}
+
+int _minutesFromSeconds(int seconds) {
+  if (seconds <= 0) return 0;
+  return (seconds / 60).ceil().clamp(0, 9999).toInt();
 }
 
 int _tomatoCount(PomodoroSession session) {

@@ -7,7 +7,7 @@ import '../event_detail.dart';
 import '../event_input.dart';
 import '../arrange/widgets/draggable_add_button.dart';
 import 'pomodoro_home_controller.dart';
-import 'pomodoro_models.dart';
+import '../../models/pomodoro_models.dart';
 import 'pomodoro_style.dart';
 import 'pomodoro_timer_page.dart';
 import 'pomodoro_history_page.dart';
@@ -154,7 +154,7 @@ class _PomodoroPageState extends State<PomodoroPage>
       context,
       MaterialPageRoute(builder: (_) => const EventInputScreen()),
     );
-    if (changed == true) {
+    if (changed != false) {
       await _controller.load();
     }
   }
@@ -233,7 +233,7 @@ class _PomodoroPageState extends State<PomodoroPage>
       context,
       MaterialPageRoute(builder: (_) => EventDetailScreen(eventId: eventId)),
     );
-    if (changed == true) {
+    if (changed != false) {
       await _controller.load();
     }
   }

@@ -1,12 +1,16 @@
 import 'package:flutter/foundation.dart';
 
 import '../../models/event.dart';
-import '../../services/database.dart';
+import '../../repositories/event_repository.dart';
 import 'arrange_constants.dart';
 import 'arrange_helpers.dart';
 import 'arrange_style.dart';
 
 class ArrangeController extends ChangeNotifier {
+  ArrangeController({EventRepository? eventRepository})
+    : _eventRepository = eventRepository ?? const EventRepository();
+
+  final EventRepository _eventRepository;
   List<Event> _inboxEvents = [];
   Map<String, List<Event>> _calendarEventsByCell = {};
   List<Event> _completedEvents = [];
@@ -17,8 +21,8 @@ class ArrangeController extends ChangeNotifier {
 
   Future<void> load() async {
     try {
-      final active = await LocalDatabase.getArrangeEvents();
-      final deleted = await LocalDatabase.getDeletedArrangeEvents();
+      final active = await _eventRepository.loadArrangeEvents();
+      final deleted = await _eventRepository.loadDeletedArrangeEvents();
       final calendarEvents = active
           .where((e) => e.scheduledDate != null && e.timeSlot != null)
           .toList();
@@ -59,15 +63,13 @@ class ArrangeController extends ChangeNotifier {
 
   Future<void> markCompleted(Event event) async {
     if (event.id == null) return;
-    event.status = 'completed';
-    event.completedAt = DateTime.now().toIso8601String();
-    await LocalDatabase.updateEventCompletion(event.id!, event.completedAt!);
+    await _eventRepository.markCompleted(event, DateTime.now());
     await load();
   }
 
   Future<void> restoreEvent(Event event) async {
     if (event.id == null) return;
-    await LocalDatabase.restoreEvent(event.id!);
+    await _eventRepository.restoreEvent(event.id!);
     await load();
   }
 
@@ -117,7 +119,7 @@ class ArrangeController extends ChangeNotifier {
     if (ArrangeQuadrants.sameQuadrant(event.quadrant, quadrant)) return;
 
     event.quadrant = quadrant.id;
-    await LocalDatabase.updateEventQuadrant(event.id!, event.quadrant);
+    await _eventRepository.updateQuadrant(event.id!, event.quadrant);
     await load();
   }
 
@@ -131,7 +133,7 @@ class ArrangeController extends ChangeNotifier {
     String date,
     String timeSlot,
   ) async {
-    await LocalDatabase.updateEventCalendarOrderBatch(events, date, timeSlot);
+    await _eventRepository.updateCalendarOrderBatch(events, date, timeSlot);
   }
 
   Map<String, List<Event>> _buildCalendarEventIndex(List<Event> events) {

@@ -1,4 +1,4 @@
-import '../../models/event.dart';
+import 'event.dart';
 
 enum PomodoroStartSource { home, eventDetail, history }
 
@@ -201,12 +201,14 @@ class PomodoroHistoryDetail {
   final PomodoroSession session;
   final List<PomodoroInterruption> interruptions;
   final List<PomodoroIdea> ideas;
+  final List<PomodoroStepRecord> stepRecords;
 
   const PomodoroHistoryDetail({
     required this.event,
     required this.session,
     required this.interruptions,
     required this.ideas,
+    this.stepRecords = const [],
   });
 }
 

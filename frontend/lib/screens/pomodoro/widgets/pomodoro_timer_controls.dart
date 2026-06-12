@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../pomodoro_models.dart';
+import '../../../models/pomodoro_models.dart';
 import '../pomodoro_style.dart';
 
 class PomodoroTimerControls extends StatelessWidget {

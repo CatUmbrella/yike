@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'event_input_controller.dart';
@@ -38,20 +40,23 @@ class _EventInputScreenState extends State<EventInputScreen> {
     FocusScope.of(context).unfocus();
   }
 
-  Future<void> _saveAndExit() async {
-    if (_exiting) return;
+  Future<bool> _saveAndExit({bool pop = true}) async {
+    if (_exiting) return false;
     _exiting = true;
-    FocusScope.of(context).unfocus();
+    if (mounted) FocusScope.of(context).unfocus();
     final result = await _controller.saveValidDrafts();
-    if (!mounted) return;
     if (result.failedCount > 0) {
       _exiting = false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${result.failedCount} 个事件保存失败，请稍后重试')),
-      );
-      return;
+      if (pop && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${result.failedCount} 个事件保存失败，请稍后重试')),
+        );
+      }
+      return false;
     }
-    Navigator.pop(context, _changed || result.changed);
+    final changed = _changed || result.changed;
+    if (pop && mounted) Navigator.pop(context, changed);
+    return changed;
   }
 
   Future<void> _deleteDraft(int draftIndex) async {
@@ -71,11 +76,18 @@ class _EventInputScreenState extends State<EventInputScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final allowInteractivePop =
+        Theme.of(context).platform == TargetPlatform.iOS;
+
     return PopScope<void>(
-      canPop: false,
+      canPop: allowInteractivePop,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _saveAndExit();
+        if (didPop) {
+          unawaited(_saveAndExit(pop: false));
+          return;
+        }
+        unawaited(_saveAndExit());
       },
       child: Scaffold(
         backgroundColor: EventInputStyle.background,
@@ -178,16 +190,39 @@ class _EventInputScreenState extends State<EventInputScreen> {
                               },
                             ),
                           ),
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              metrics.horizontalPadding,
-                              metrics.isCompact ? 8 : 10,
-                              metrics.horizontalPadding,
-                              metrics.bottomPadding,
-                            ),
-                            child: EventInputActions(
-                              onAddCustomEvent: _controller.addCustomEvent,
-                              onVoiceInput: _showVoiceComingSoon,
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(end: keyboardVisible ? 0 : 1),
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) {
+                              return ClipRect(
+                                child: Align(
+                                  heightFactor: value,
+                                  alignment: Alignment.topCenter,
+                                  child: Opacity(
+                                    opacity: value,
+                                    child: Transform.translate(
+                                      offset: Offset(0, 14 * (1 - value)),
+                                      child: IgnorePointer(
+                                        ignoring: value < 0.05,
+                                        child: child,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                metrics.horizontalPadding,
+                                metrics.isCompact ? 6 : 8,
+                                metrics.horizontalPadding,
+                                metrics.bottomPadding,
+                              ),
+                              child: EventInputActions(
+                                onAddCustomEvent: _controller.addCustomEvent,
+                                onVoiceInput: _showVoiceComingSoon,
+                              ),
                             ),
                           ),
                         ],

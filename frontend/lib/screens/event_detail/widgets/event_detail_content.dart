@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import '../../../models/event.dart';
 import '../../../shared/event_formatters.dart';
 import '../../arrange/arrange_style.dart';
-import '../../pomodoro/pomodoro_models.dart';
-import '../../pomodoro/pomodoro_repository.dart';
+import '../../../models/pomodoro_models.dart';
+import '../../../repositories/pomodoro_repository.dart';
 import '../../pomodoro/pomodoro_timer_page.dart';
 
 part 'event_detail_metrics.dart';
@@ -21,6 +21,7 @@ class EventDetailContent extends StatefulWidget {
   const EventDetailContent({
     super.key,
     required this.event,
+    this.keyboardVisible = false,
     required this.reviewController,
     required this.onBack,
     required this.onDelete,
@@ -28,6 +29,7 @@ class EventDetailContent extends StatefulWidget {
   });
 
   final Event event;
+  final bool keyboardVisible;
   final TextEditingController reviewController;
   final VoidCallback onBack;
   final VoidCallback onDelete;
@@ -69,7 +71,11 @@ class _EventDetailContentState extends State<EventDetailContent> {
     final horizontalPadding = compact ? 16.0 : 24.0;
     final bottomButtonHeight = compact ? 72.0 : 80.0;
     final bottomGap = math.max(12.0, safeBottom + 10);
-    final bottomPadding = bottomButtonHeight + bottomGap + 22;
+    final showPomodoroButton = widget.event.status != 'completed';
+    final pomodoroButtonVisible = showPomodoroButton && !widget.keyboardVisible;
+    final bottomPadding = pomodoroButtonVisible
+        ? bottomButtonHeight + bottomGap + 22
+        : bottomGap + 22;
 
     return Stack(
       children: [
@@ -132,16 +138,40 @@ class _EventDetailContentState extends State<EventDetailContent> {
             ),
           ),
         ),
-        Positioned(
-          left: horizontalPadding,
-          right: horizontalPadding,
-          bottom: bottomGap,
-          child: _PomodoroButton(
-            event: widget.event,
-            height: bottomButtonHeight,
-            compact: compact,
+        if (showPomodoroButton)
+          Positioned(
+            left: horizontalPadding,
+            right: horizontalPadding,
+            bottom: bottomGap,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: widget.keyboardVisible ? 0 : 1),
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return ClipRect(
+                  child: Align(
+                    heightFactor: value,
+                    alignment: Alignment.bottomCenter,
+                    child: Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 14 * (1 - value)),
+                        child: IgnorePointer(
+                          ignoring: value < 0.05,
+                          child: child,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+              child: _PomodoroButton(
+                event: widget.event,
+                height: bottomButtonHeight,
+                compact: compact,
+              ),
+            ),
           ),
-        ),
       ],
     );
   }

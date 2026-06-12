@@ -100,7 +100,7 @@ class _ArrangePageState extends State<ArrangePage>
       context,
       MaterialPageRoute(builder: (_) => const EventInputScreen()),
     );
-    if (changed == true) _controller.load();
+    if (changed != false) _controller.load();
   }
 
   Future<void> _openDetail(Event event) async {
@@ -109,7 +109,7 @@ class _ArrangePageState extends State<ArrangePage>
       context,
       MaterialPageRoute(builder: (_) => EventDetailScreen(eventId: event.id!)),
     );
-    if (changed == true) _controller.load();
+    if (changed != false) _controller.load();
   }
 
   Future<void> _completeEvent(Event event) async {

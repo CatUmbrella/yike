@@ -166,6 +166,8 @@ class _StepTile extends StatelessWidget {
                   child: TextField(
                     controller: controller,
                     onChanged: onChanged,
+                    onTapOutside: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
                     minLines: 1,
                     maxLines: 2,
                     cursorColor: ArrangeStyle.accent,

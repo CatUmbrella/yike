@@ -120,11 +120,11 @@ class EventInputMetrics {
         durationValueSize: 13,
         stepLabelWidth: 58,
         stepTimelineHeight: 68,
-        actionBarHeight: 50,
-        addIconSize: 36,
-        micButtonSize: 62,
-        micIconSize: 40,
-        bottomPadding: 12,
+        actionBarHeight: 44,
+        addIconSize: 30,
+        micButtonSize: 50,
+        micIconSize: 34,
+        bottomPadding: 8,
       );
     }
 
@@ -152,11 +152,11 @@ class EventInputMetrics {
         durationValueSize: 15,
         stepLabelWidth: 72,
         stepTimelineHeight: 72,
-        actionBarHeight: 58,
-        addIconSize: 42,
-        micButtonSize: 70,
-        micIconSize: 46,
-        bottomPadding: 18,
+        actionBarHeight: 48,
+        addIconSize: 34,
+        micButtonSize: 56,
+        micIconSize: 38,
+        bottomPadding: 10,
       );
     }
 
@@ -183,11 +183,11 @@ class EventInputMetrics {
       durationValueSize: 16,
       stepLabelWidth: 80,
       stepTimelineHeight: 74,
-      actionBarHeight: 60,
-      addIconSize: 44,
-      micButtonSize: 72,
-      micIconSize: 48,
-      bottomPadding: 22,
+      actionBarHeight: 52,
+      addIconSize: 36,
+      micButtonSize: 60,
+      micIconSize: 40,
+      bottomPadding: 12,
     );
   }
 

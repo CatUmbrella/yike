@@ -4,7 +4,7 @@ import '../../models/event.dart';
 import 'dialogs/idea_to_inbox_card_dialog.dart';
 import 'dialogs/pomodoro_end_confirm_dialog.dart';
 import 'dialogs/pomodoro_record_input_dialog.dart';
-import 'pomodoro_models.dart';
+import '../../models/pomodoro_models.dart';
 import 'pomodoro_style.dart';
 import 'pomodoro_timer_controller.dart';
 import 'widgets/pomodoro_lane_panel.dart';
@@ -55,16 +55,28 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         return Scaffold(
           backgroundColor: PomodoroStyle.background,
           appBar: AppBar(
-            title: const Text(
-              '番茄钟',
-              style: TextStyle(
-                color: PomodoroStyle.textPrimary,
-                fontWeight: FontWeight.w800,
+            automaticallyImplyLeading: false,
+            titleSpacing: 18,
+            title: TextButton.icon(
+              onPressed: () => Navigator.pop(context, false),
+              style: TextButton.styleFrom(
+                foregroundColor: PomodoroStyle.accent,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(104, 44),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 28),
+              label: const Text(
+                '番茄钟',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ),
             backgroundColor: PomodoroStyle.background,
             elevation: 0,
             foregroundColor: PomodoroStyle.textPrimary,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
           ),
           body: _controller.loading
               ? const Center(child: CircularProgressIndicator())

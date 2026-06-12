@@ -59,6 +59,8 @@ class _ReviewCard extends StatelessWidget {
               ),
               child: TextField(
                 controller: controller,
+                onTapOutside: (_) =>
+                    FocusManager.instance.primaryFocus?.unfocus(),
                 minLines: 4,
                 maxLines: 8,
                 cursorColor: ArrangeStyle.accent,

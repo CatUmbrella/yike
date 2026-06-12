@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/event.dart';
-import '../services/database.dart';
+import '../repositories/event_repository.dart';
 import 'arrange/arrange_style.dart';
 import 'event_detail/widgets/event_detail_content.dart';
 
@@ -9,8 +11,13 @@ enum _DetailLoadState { loading, loaded, notFound }
 
 class EventDetailScreen extends StatefulWidget {
   final int eventId;
+  final EventRepository eventRepository;
 
-  const EventDetailScreen({super.key, required this.eventId});
+  const EventDetailScreen({
+    super.key,
+    required this.eventId,
+    this.eventRepository = const EventRepository(),
+  });
 
   @override
   State<EventDetailScreen> createState() => _EventDetailScreenState();
@@ -21,7 +28,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   var _loadState = _DetailLoadState.loading;
   Event? _event;
   bool _closing = false;
-  bool _allowPop = false;
   bool _eventChanged = false;
 
   @override
@@ -37,7 +43,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<void> _load() async {
-    final event = await LocalDatabase.getEventById(widget.eventId);
+    final event = await widget.eventRepository.loadEventById(widget.eventId);
     if (!mounted) return;
     setState(() {
       _event = event;
@@ -51,24 +57,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     });
   }
 
-  Future<void> _close() async {
-    if (_closing) return;
+  Future<bool> _close({bool pop = true}) async {
+    if (_closing) return false;
     _closing = true;
-    FocusScope.of(context).unfocus();
+    if (mounted) FocusScope.of(context).unfocus();
 
     try {
       final changed = await _saveChangesIfNeeded();
-      if (!mounted) return;
-      setState(() => _allowPop = true);
-      Navigator.pop(context, changed);
-      return;
+      if (pop && mounted) Navigator.pop(context, changed);
+      return changed;
     } catch (_) {
-      if (!mounted) return;
-      _closing = false;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('复盘保存失败，请稍后重试')));
-      return;
+      if (pop && mounted) {
+        _closing = false;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('复盘保存失败，请稍后重试')));
+      }
+      return false;
     }
   }
 
@@ -82,15 +87,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     event.review = review;
     if (_eventChanged) {
-      await LocalDatabase.saveEvent(event);
+      await widget.eventRepository.saveEvent(event);
     } else {
-      await LocalDatabase.updateEventReview(event.id!, review);
+      await widget.eventRepository.updateReview(event.id!, review);
     }
     return true;
   }
 
   void _markEventChanged() {
     _eventChanged = true;
+  }
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   Future<void> _deleteEvent() async {
@@ -117,23 +126,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
 
     if (confirmed != true) return;
-    await LocalDatabase.softDeleteEvent(event.id!);
+    await widget.eventRepository.softDeleteEvent(event.id!);
     if (!mounted) return;
-    setState(() => _allowPop = true);
+    _closing = true;
     Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
+    final allowInteractivePop =
+        Theme.of(context).platform == TargetPlatform.iOS;
+
     return PopScope<void>(
-      canPop: _allowPop,
+      canPop: allowInteractivePop,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _close();
+        if (didPop) {
+          unawaited(_close(pop: false));
+          return;
+        }
+        unawaited(_close());
       },
       child: Scaffold(
         backgroundColor: ArrangeStyle.background,
-        body: _buildBody(),
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _dismissKeyboard,
+          child: _buildBody(),
+        ),
       ),
     );
   }
@@ -147,6 +166,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       case _DetailLoadState.loaded:
         return EventDetailContent(
           event: _event!,
+          keyboardVisible: MediaQuery.viewInsetsOf(context).bottom > 0,
           reviewController: _reviewController,
           onBack: _close,
           onDelete: _deleteEvent,

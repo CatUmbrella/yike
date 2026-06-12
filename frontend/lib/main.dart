@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'models/event.dart';
+import 'repositories/event_repository.dart';
 import 'screens/arrange/arrange_style.dart';
 import 'screens/arrange_page.dart';
 import 'screens/data_page.dart';
 import 'screens/pomodoro_page.dart';
 import 'screens/template_page.dart';
-import 'services/database.dart';
 
 void main() => runApp(const YiKeApp());
 
@@ -38,6 +38,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final EventRepository _eventRepository = const EventRepository();
   int _index = 0;
   int _arrangeRefreshToken = 0;
   bool _eventDragActive = false;
@@ -47,9 +48,23 @@ class _HomePageState extends State<HomePage> {
   Timer? _undoDeleteTimer;
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_runStartupDataRepairs());
+  }
+
+  @override
   void dispose() {
     _undoDeleteTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _runStartupDataRepairs() async {
+    try {
+      await _eventRepository.backfillStepCompletionsFromPomodoroRecords();
+    } catch (_) {
+      // Keep startup usable if the local database is unavailable.
+    }
   }
 
   @override
@@ -97,7 +112,7 @@ class _HomePageState extends State<HomePage> {
     final eventId = event.id;
     if (eventId == null) return;
 
-    await LocalDatabase.softDeleteEvent(eventId);
+    await _eventRepository.softDeleteEvent(eventId);
     if (!mounted) return;
     setState(() {
       _eventDragActive = false;
@@ -113,7 +128,7 @@ class _HomePageState extends State<HomePage> {
     if (eventId == null) return;
 
     _undoDeleteTimer?.cancel();
-    await LocalDatabase.restoreEvent(eventId);
+    await _eventRepository.restoreEvent(eventId);
     if (!mounted) return;
     setState(() {
       _undoDeleteVisible = false;
@@ -173,18 +188,22 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              AnimatedSlide(
-                offset: _eventDragActive ? Offset.zero : const Offset(0, 1.18),
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                child: IgnorePointer(
-                  ignoring: !_eventDragActive,
+              if (_eventDragActive)
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 1, end: 0),
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return Transform.translate(
+                      offset: Offset(0, height * 1.18 * value),
+                      child: child,
+                    );
+                  },
                   child: _DeleteDropCapsule(
                     height: height,
                     onAccept: _softDeleteDraggedEvent,
                   ),
                 ),
-              ),
             ],
           ),
         ),

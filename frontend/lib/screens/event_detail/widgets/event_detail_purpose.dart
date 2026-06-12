@@ -31,6 +31,7 @@ class _PurposeCard extends StatelessWidget {
           TextField(
             controller: controller,
             onChanged: onChanged,
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             minLines: 2,
             maxLines: 4,
             cursorColor: ArrangeStyle.accent,

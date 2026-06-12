@@ -38,7 +38,7 @@ class EventInputActions extends StatelessWidget {
             ),
           ),
         ),
-        SizedBox(height: metrics.isCompact ? 12 : 16),
+        SizedBox(height: metrics.isCompact ? 8 : 10),
         SizedBox(
           width: metrics.micButtonSize,
           height: metrics.micButtonSize,

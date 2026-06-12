@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../shared/event_formatters.dart';
 import 'dialogs/history_session_dialog.dart';
 import 'pomodoro_history_controller.dart';
-import 'pomodoro_models.dart';
-import 'pomodoro_repository.dart';
+import '../../models/pomodoro_models.dart';
+import '../../repositories/pomodoro_repository.dart';
 import 'pomodoro_style.dart';
 import 'widgets/tomato_icon.dart';
 
@@ -41,38 +41,53 @@ class _PomodoroHistoryPageState extends State<PomodoroHistoryPage> {
         return Scaffold(
           backgroundColor: PomodoroStyle.background,
           appBar: AppBar(
-            title: const Text(
-              '番茄钟',
-              style: TextStyle(
-                color: PomodoroStyle.textPrimary,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
+            automaticallyImplyLeading: false,
+            titleSpacing: 18,
+            title: TextButton.icon(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: PomodoroStyle.accent,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(104, 44),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 28),
+              label: const Text(
+                '番茄钟',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ),
             foregroundColor: PomodoroStyle.textPrimary,
             backgroundColor: PomodoroStyle.background,
             elevation: 0,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
           ),
-          body: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 8, 28, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _HistorySearchField(
-                    controller: _searchController,
-                    onSubmitted: controller.updateSearchQuery,
-                  ),
-                  const SizedBox(height: 28),
-                  _MonthSelector(controller: controller),
-                  const SizedBox(height: 18),
-                  Expanded(
-                    child: controller.loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _HistoryList(controller: controller),
-                  ),
-                ],
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 8, 28, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _HistorySearchField(
+                      controller: _searchController,
+                      onSubmitted: controller.updateSearchQuery,
+                    ),
+                    const SizedBox(height: 28),
+                    _MonthSelector(controller: controller),
+                    const SizedBox(height: 18),
+                    Expanded(
+                      child: controller.loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _HistoryList(controller: controller),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -110,6 +125,7 @@ class _HistorySearchField extends StatelessWidget {
       child: TextField(
         controller: controller,
         onSubmitted: onSubmitted,
+        onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
         textInputAction: TextInputAction.search,
         style: const TextStyle(
           color: PomodoroStyle.textPrimary,

@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../models/event.dart';
-import 'pomodoro_models.dart';
-import 'pomodoro_repository.dart';
+import '../../models/pomodoro_models.dart';
+import '../../repositories/pomodoro_repository.dart';
 
 class PomodoroHomeController extends ChangeNotifier {
   PomodoroHomeController({PomodoroRepository? repository})

@@ -64,29 +64,35 @@ class _MetricChip extends StatelessWidget {
         boxShadow: ArrangeStyle.itemShadow,
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: compact ? 18 : 20, color: ArrangeStyle.accent),
           SizedBox(width: compact ? 6 : 8),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: '$label '),
+          Expanded(
+            child: FittedBox(
+              alignment: Alignment.centerLeft,
+              fit: BoxFit.scaleDown,
+              child: Text.rich(
                 TextSpan(
-                  text: value,
-                  style: TextStyle(
-                    color: emphasizeValue
-                        ? ArrangeStyle.accent
-                        : ArrangeStyle.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  children: [
+                    TextSpan(text: '$label '),
+                    TextSpan(
+                      text: value,
+                      style: TextStyle(
+                        color: emphasizeValue
+                            ? ArrangeStyle.accent
+                            : ArrangeStyle.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            style: TextStyle(
-              color: ArrangeStyle.textPrimary,
-              fontSize: compact ? 14 : 15,
-              height: 1.15,
+                maxLines: 1,
+                style: TextStyle(
+                  color: ArrangeStyle.textPrimary,
+                  fontSize: compact ? 14 : 15,
+                  height: 1.15,
+                ),
+              ),
             ),
           ),
         ],

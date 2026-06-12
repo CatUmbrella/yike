@@ -1,12 +1,18 @@
 import 'dart:math' as math;
 
-import '../../models/event.dart';
-import '../../services/database.dart';
-import '../../shared/event_formatters.dart';
-import 'pomodoro_constants.dart';
-import 'pomodoro_models.dart';
+import '../models/event.dart';
+import '../models/pomodoro_models.dart';
+import '../services/database.dart';
+import '../shared/event_formatters.dart';
+import '../shared/pomodoro_constants.dart';
+import 'event_repository.dart';
 
 class PomodoroRepository {
+  PomodoroRepository({EventRepository? eventRepository})
+    : _eventRepository = eventRepository ?? const EventRepository();
+
+  final EventRepository _eventRepository;
+
   Future<List<PomodoroHistoryPreviewItem>> loadRecentHistoryPreview() async {
     final snapshots = await _storedSnapshots();
     return snapshots.take(3).map((snapshot) {
@@ -26,7 +32,7 @@ class PomodoroRepository {
   }
 
   Future<List<Event>> loadCandidateEvents() async {
-    final events = await LocalDatabase.getArrangeEvents();
+    final events = await _eventRepository.loadArrangeEvents();
     final candidates = events
         .where(
           (event) => event.status != 'completed' && event.deletedAt == null,
@@ -65,7 +71,7 @@ class PomodoroRepository {
       throw StateError('Another pomodoro session is active.');
     }
 
-    final loadedEvent = await LocalDatabase.getEventById(eventId);
+    final loadedEvent = await _eventRepository.loadEventById(eventId);
     final event = loadedEvent ?? initialEvent;
     if (event == null) {
       throw StateError('Pomodoro event not found: $eventId');
@@ -167,12 +173,13 @@ class PomodoroRepository {
         session: snapshot.session,
         interruptions: snapshot.interruptions,
         ideas: snapshot.ideas,
+        stepRecords: snapshot.stepRecords,
       );
     }
 
     final event = item.event.id == null
         ? item.event
-        : await LocalDatabase.getEventById(item.event.id!) ?? item.event;
+        : await _eventRepository.loadEventById(item.event.id!) ?? item.event;
     final now = DateTime.now();
     final session = PomodoroSession(
       id: item.sessionId,
@@ -195,6 +202,7 @@ class PomodoroRepository {
       session: session,
       interruptions: const [],
       ideas: const [],
+      stepRecords: const [],
     );
   }
 
@@ -225,9 +233,9 @@ class PomodoroRepository {
       tomatoCount,
     );
     if (saveEvent) {
-      await LocalDatabase.saveEvent(snapshot.event);
+      await _eventRepository.saveEvent(snapshot.event);
     } else {
-      await LocalDatabase.updateEventPomodoroStats(
+      await _eventRepository.updatePomodoroStats(
         eventId,
         tomatoCount: snapshot.event.tomatoCount,
       );
@@ -236,11 +244,11 @@ class PomodoroRepository {
 
   Future<void> saveHistoryEventEdit(Event event, {int? sessionId}) async {
     if (event.id == null) return;
-    final existing = await LocalDatabase.getEventById(event.id!);
+    final existing = await _eventRepository.loadEventById(event.id!);
     if (existing != null && sessionId != null) {
       await _writeEditLogs(existing, event, sessionId);
     }
-    await LocalDatabase.saveEvent(event);
+    await _eventRepository.saveEvent(event);
   }
 
   Future<void> markEventCompleted(
@@ -249,20 +257,11 @@ class PomodoroRepository {
     int? actualMinutes,
     int? tomatoCount,
   }) async {
-    final eventId = event.id;
-    if (eventId == null) return;
-    final completedAtText = completedAt.toIso8601String();
-    event.status = 'completed';
-    event.completedAt = completedAtText;
-    event.actualMinutes = actualMinutes;
-    if (tomatoCount != null) {
-      event.tomatoCount = math.max(event.tomatoCount, tomatoCount);
-    }
-    await LocalDatabase.updateEventCompletion(
-      eventId,
-      completedAtText,
+    await _eventRepository.markCompleted(
+      event,
+      completedAt,
       actualMinutes: actualMinutes,
-      tomatoCount: event.tomatoCount,
+      tomatoCount: tomatoCount,
     );
   }
 
@@ -285,7 +284,7 @@ class PomodoroRepository {
       steps: draft.steps,
       createdAt: now,
     );
-    final inboxEventId = await LocalDatabase.saveEvent(inboxEvent);
+    final inboxEventId = await _eventRepository.saveEvent(inboxEvent);
     await LocalDatabase.markPomodoroIdeaInboxDecision(
       sessionId: draft.idea.sessionId,
       content: draft.idea.content,
@@ -315,7 +314,7 @@ class PomodoroRepository {
     final sessionId = _intValue(sessionRow['id']);
     if (eventId == null || sessionId == null) return null;
 
-    final event = await LocalDatabase.getEventById(eventId);
+    final event = await _eventRepository.loadEventById(eventId);
     if (event == null) return null;
 
     final session = _withCurrentRunningDuration(

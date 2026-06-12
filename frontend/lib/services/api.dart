@@ -25,7 +25,7 @@ class ApiService {
             headers: _jsonHeaders,
             body: jsonEncode({'text': text}),
           )
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 120));
 
       if (response.statusCode != 200) {
         return ParseEventResult.failure('AI 服务异常，请稍后重试');

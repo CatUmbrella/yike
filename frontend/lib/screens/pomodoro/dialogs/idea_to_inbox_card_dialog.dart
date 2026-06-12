@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/event.dart';
 import '../../event_input/widgets/event_duration_picker_sheet.dart';
 import 'pomodoro_dialog_shell.dart';
-import '../pomodoro_models.dart';
+import '../../../models/pomodoro_models.dart';
 import '../pomodoro_style.dart';
 
 Future<IdeaToInboxDraft?> showIdeaToInboxCardDialog({

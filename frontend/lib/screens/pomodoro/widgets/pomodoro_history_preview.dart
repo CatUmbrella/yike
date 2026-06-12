@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../pomodoro_models.dart';
+import '../../../models/pomodoro_models.dart';
 import '../pomodoro_style.dart';
 import 'tomato_icon.dart';
 

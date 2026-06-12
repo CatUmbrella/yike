@@ -1,13 +1,17 @@
 import 'package:flutter/foundation.dart';
 
 import '../../models/event.dart';
+import '../../repositories/event_repository.dart';
 import '../../services/api.dart';
-import '../../services/database.dart';
 import '../../shared/event_schedule.dart';
 import 'event_draft.dart';
 import 'event_input_state.dart';
 
 class EventInputController extends ChangeNotifier {
+  EventInputController({EventRepository? eventRepository})
+    : _eventRepository = eventRepository ?? const EventRepository();
+
+  final EventRepository _eventRepository;
   EventInputState _state = const EventInputState();
   int _parseRunId = 0;
 
@@ -15,7 +19,7 @@ class EventInputController extends ChangeNotifier {
 
   Future<void> loadExistingEvents() async {
     try {
-      final events = await LocalDatabase.getEvents();
+      final events = await _eventRepository.loadEvents();
       final visibleEvents = events
           .where((event) => event.status != 'completed')
           .map(EventDraft.fromExistingEvent)
@@ -129,7 +133,7 @@ class EventInputController extends ChangeNotifier {
       _reorderSteps(event);
 
       try {
-        await LocalDatabase.saveEvent(event);
+        await _eventRepository.saveEvent(event);
         savedCount++;
       } catch (_) {
         failedCount++;
@@ -224,7 +228,7 @@ class EventInputController extends ChangeNotifier {
     final drafts = List<EventDraft>.from(_state.drafts);
     final event = drafts[draftIndex].event;
     if (event.id != null) {
-      await LocalDatabase.softDeleteEvent(event.id!);
+      await _eventRepository.softDeleteEvent(event.id!);
     }
 
     drafts.removeAt(draftIndex);
