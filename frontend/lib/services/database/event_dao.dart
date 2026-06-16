@@ -5,27 +5,42 @@ class _EventDao {
 
   static Future<int> saveEvent(Event event) async {
     final db = await _AppDatabase.database;
-    if (event.id != null) {
-      await db.update(
-        'events',
-        _eventToRow(event),
-        where: 'id = ?',
-        whereArgs: [event.id],
-      );
-      await db.delete('steps', where: 'event_id = ?', whereArgs: [event.id]);
-    } else {
-      event.id = await db.insert('events', _eventToRow(event));
-    }
-    for (final s in event.steps) {
-      await db.insert('steps', {
-        'event_id': event.id,
-        'step_order': s.stepOrder,
-        'description': s.description,
-        'estimated_min': s.estimatedMin,
-        'completed_at': s.completedAt,
-      });
-    }
-    return event.id!;
+    final originalId = event.id;
+    int? insertedId;
+
+    final savedId = await db.transaction<int>((txn) async {
+      if (originalId != null) {
+        await txn.update(
+          'events',
+          _eventToRow(event),
+          where: 'id = ?',
+          whereArgs: [originalId],
+        );
+        await txn.delete(
+          'steps',
+          where: 'event_id = ?',
+          whereArgs: [originalId],
+        );
+      } else {
+        final row = _eventToRow(event)..remove('id');
+        insertedId = await txn.insert('events', row);
+      }
+
+      final eventId = originalId ?? insertedId!;
+      for (final s in event.steps) {
+        await txn.insert('steps', {
+          'event_id': eventId,
+          'step_order': s.stepOrder,
+          'description': s.description,
+          'estimated_min': s.estimatedMin,
+          'completed_at': s.completedAt,
+        });
+      }
+      return eventId;
+    });
+
+    event.id = savedId;
+    return savedId;
   }
 
   static Future<List<Event>> getArrangeEvents() {
