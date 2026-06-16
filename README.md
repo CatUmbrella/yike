@@ -8,7 +8,7 @@
 
 | AI 任务录入                              | 事件安排                               | 番茄钟                                  |
 | ---------------------------------------- | -------------------------------------- | --------------------------------------- |
-| ![项目截图](./assets/AI_parser_page.png) | ![项目截图](.\assets\arrange_page.png) | ![项目截图](.\assets\pomodoro_page.png) |
+| ![项目截图](./assets/AI_parser_page.png) | ![项目截图](./assets/arrange_page.png) | ![项目截图](./assets/pomodoro_page.png) |
 
 ## 核心功能
 
