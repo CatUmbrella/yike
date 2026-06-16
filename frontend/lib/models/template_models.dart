@@ -14,6 +14,8 @@ enum TemplateRelation { linear, parallel }
 
 enum TemplateDeploymentStatus { notStarted, active, completed }
 
+enum TemplateDeploymentStageStatus { locked, inProgress, completed }
+
 class TemplateNotice {
   final int? id;
   final int noticeOrder;
@@ -237,37 +239,71 @@ class TemplateDeployment {
   final int id;
   final TaskTemplate template;
   final TemplateDeploymentStatus status;
+  final int? activeStageId;
   final int activeStageIndex;
   final bool pauseAfterCurrentStage;
   final DateTime deployedAt;
   final DateTime? enabledAt;
   final DateTime? completedAt;
   final bool expanded;
+  final List<TemplateDeploymentStageProgress> stageProgress;
 
   const TemplateDeployment({
     required this.id,
     required this.template,
     required this.status,
+    this.activeStageId,
     required this.activeStageIndex,
     required this.pauseAfterCurrentStage,
     required this.deployedAt,
     this.enabledAt,
     this.completedAt,
     this.expanded = false,
+    this.stageProgress = const [],
   });
 
   TemplateStage? get activeStage {
     if (template.stages.isEmpty) return null;
+    final stageId = activeStageId;
+    if (stageId != null) {
+      for (final stage in template.stages) {
+        if (stage.id == stageId) return stage;
+      }
+    }
+    if (activeStageIndex < 0) return null;
     final index = activeStageIndex.clamp(0, template.stages.length - 1).toInt();
     return template.stages[index];
   }
 
   double get progress {
-    final total = template.eventCount;
+    final total = stageProgress.isEmpty
+        ? template.eventCount
+        : stageProgress.fold<int>(0, (sum, item) => sum + item.totalEventCount);
     if (total == 0) return 0;
     if (status == TemplateDeploymentStatus.completed) return 1;
-    final completed = activeStageIndex.clamp(0, total);
+    final completed = stageProgress.isEmpty
+        ? activeStageIndex.clamp(0, total).toInt()
+        : stageProgress.fold<int>(
+            0,
+            (sum, item) => sum + item.completedEventCount,
+          );
     return completed / total;
+  }
+
+  int get completedEventCount =>
+      stageProgress.fold<int>(0, (sum, item) => sum + item.completedEventCount);
+
+  int get totalEventCount => stageProgress.isEmpty
+      ? template.eventCount
+      : stageProgress.fold<int>(0, (sum, item) => sum + item.totalEventCount);
+
+  TemplateDeploymentStageProgress? progressForStage(TemplateStage stage) {
+    final stageId = stage.id;
+    if (stageId == null) return null;
+    for (final item in stageProgress) {
+      if (item.stageId == stageId) return item;
+    }
+    return null;
   }
 
   int get elapsedMinutes {
@@ -280,6 +316,8 @@ class TemplateDeployment {
     int? id,
     TaskTemplate? template,
     TemplateDeploymentStatus? status,
+    int? activeStageId,
+    bool clearActiveStage = false,
     int? activeStageIndex,
     bool? pauseAfterCurrentStage,
     DateTime? deployedAt,
@@ -287,11 +325,15 @@ class TemplateDeployment {
     DateTime? completedAt,
     bool clearCompletedAt = false,
     bool? expanded,
+    List<TemplateDeploymentStageProgress>? stageProgress,
   }) {
     return TemplateDeployment(
       id: id ?? this.id,
       template: template ?? this.template,
       status: status ?? this.status,
+      activeStageId: clearActiveStage
+          ? null
+          : activeStageId ?? this.activeStageId,
       activeStageIndex: activeStageIndex ?? this.activeStageIndex,
       pauseAfterCurrentStage:
           pauseAfterCurrentStage ?? this.pauseAfterCurrentStage,
@@ -299,8 +341,30 @@ class TemplateDeployment {
       enabledAt: enabledAt ?? this.enabledAt,
       completedAt: clearCompletedAt ? null : completedAt ?? this.completedAt,
       expanded: expanded ?? this.expanded,
+      stageProgress: stageProgress ?? this.stageProgress,
     );
   }
+}
+
+class TemplateDeploymentStageProgress {
+  final int stageId;
+  final TemplateDeploymentStageStatus status;
+  final int completedEventCount;
+  final int totalEventCount;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+
+  const TemplateDeploymentStageProgress({
+    required this.stageId,
+    required this.status,
+    required this.completedEventCount,
+    required this.totalEventCount,
+    this.startedAt,
+    this.completedAt,
+  });
+
+  bool get inProgress => status == TemplateDeploymentStageStatus.inProgress;
+  bool get completed => status == TemplateDeploymentStageStatus.completed;
 }
 
 class TemplateHomeSnapshot {

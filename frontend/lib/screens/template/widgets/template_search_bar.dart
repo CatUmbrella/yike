@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../template_style.dart';
+import 'template_keyboard_dismiss.dart';
 
 class TemplateSearchBar extends StatefulWidget {
   final String value;
@@ -47,6 +48,9 @@ class _TemplateSearchBarState extends State<TemplateSearchBar> {
     return TextField(
       controller: _controller,
       onChanged: widget.onChanged,
+      onTapOutside: (_) => dismissTemplateKeyboard(),
+      onTap: () => ensureTemplateInputVisible(context),
+      scrollPadding: templateInputScrollPadding(context),
       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         isDense: true,

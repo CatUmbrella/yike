@@ -211,4 +211,39 @@ class LocalDatabase {
   static Future<void> deleteDraftTemplate(int templateId) {
     return _TemplateDao.deleteDraftTemplate(templateId);
   }
+
+  static Future<TaskTemplate> ensureStoredTemplate(TaskTemplate template) {
+    return _TemplateDao.ensureStoredTemplate(template);
+  }
+
+  static Future<List<TemplateDeployment>> getTemplateDeployments() {
+    return _TemplateDao.getTemplateDeployments();
+  }
+
+  static Future<void> createTemplateDeployment(TaskTemplate template) {
+    return _TemplateDao.createTemplateDeployment(template);
+  }
+
+  static Future<void> deleteTemplateDeployment(int deploymentId) {
+    return _TemplateDao.deleteTemplateDeployment(deploymentId);
+  }
+
+  static Future<void> enableTemplateDeployment(int deploymentId) {
+    return _TemplateDao.enableTemplateDeployment(deploymentId);
+  }
+
+  static Future<void> enableTemplateDeploymentStage(
+    int deploymentId,
+    int stageId,
+  ) {
+    return _TemplateDao.enableTemplateDeploymentStage(deploymentId, stageId);
+  }
+
+  static Future<void> resetTemplateDeployment(int deploymentId) {
+    return _TemplateDao.resetTemplateDeployment(deploymentId);
+  }
+
+  static Future<void> pauseTemplateDeployment(int deploymentId) {
+    return _TemplateDao.pauseTemplateDeployment(deploymentId);
+  }
 }

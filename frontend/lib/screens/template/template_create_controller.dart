@@ -8,6 +8,7 @@ class TemplateCreateController extends ChangeNotifier {
     : _repository = repository ?? TemplateRepository(),
       _createdAt = DateTime.now() {
     stages = [_emptyStage(1)];
+    _stageTokens = [Object()];
   }
 
   TemplateCreateController.fromTemplate(
@@ -25,7 +26,9 @@ class TemplateCreateController extends ChangeNotifier {
        currentStep = template.currentCreateStep.clamp(1, 4).toInt(),
        currentStageIndex = template.currentStageIndex,
        createCompleted = template.createCompleted,
-       _createdAt = template.createdAt;
+       _createdAt = template.createdAt {
+    _stageTokens = List.generate(stages.length, (_) => Object());
+  }
 
   final TemplateRepository _repository;
   final DateTime _createdAt;
@@ -40,10 +43,13 @@ class TemplateCreateController extends ChangeNotifier {
     const TemplateNotice(noticeOrder: 1, content: ''),
   ];
   List<TemplateStage> stages = [];
+  List<Object> _stageTokens = [];
   bool createCompleted = false;
   bool dirty = false;
 
   TemplateStage get currentStage => stages[currentStageIndex];
+
+  List<Object> get stageTokens => List.unmodifiable(_stageTokens);
 
   int get eventCount =>
       stages.fold<int>(0, (sum, stage) => sum + stage.eventCount);
@@ -67,7 +73,8 @@ class TemplateCreateController extends ChangeNotifier {
     final stage = currentStage;
     return stage.name.trim().isNotEmpty &&
         stage.goal.trim().isNotEmpty &&
-        stage.events.any((event) => event.title.trim().isNotEmpty);
+        stage.events.isNotEmpty &&
+        stage.events.every((event) => event.title.trim().isNotEmpty);
   }
 
   bool get canExport => relation != null;
@@ -84,14 +91,48 @@ class TemplateCreateController extends ChangeNotifier {
 
   void addStage() {
     stages = [...stages, _emptyStage(stages.length + 1)];
+    _stageTokens = [..._stageTokens, Object()];
     _markDirty();
   }
 
-  void deleteStage(int index) {
-    if (stages.length <= 1 || index < 0 || index >= stages.length) return;
+  int indexOfStageToken(Object token) {
+    return _stageTokens.indexWhere((item) => identical(item, token));
+  }
+
+  void deleteStageByToken(Object token) {
+    final index = indexOfStageToken(token);
+    _deleteStageAt(index);
+  }
+
+  int indexOfStage(TemplateStage target) {
+    final id = target.id;
+    if (id != null) {
+      final idIndex = stages.indexWhere((stage) => stage.id == id);
+      if (idIndex != -1) return idIndex;
+    }
+
+    final identityIndex = stages.indexWhere(
+      (stage) => identical(stage, target),
+    );
+    if (identityIndex != -1) return identityIndex;
+
+    return stages.indexWhere((stage) => stage.stageOrder == target.stageOrder);
+  }
+
+  void deleteStage(TemplateStage target) {
+    final index = indexOfStage(target);
+    _deleteStageAt(index);
+  }
+
+  void _deleteStageAt(int index) {
+    if (index < 0 || index >= stages.length) return;
     final next = [...stages]..removeAt(index);
+    final nextTokens = [..._stageTokens]..removeAt(index);
     stages = _renumberStages(next);
-    if (currentStageIndex >= stages.length) {
+    _stageTokens = nextTokens;
+    if (stages.isEmpty) {
+      currentStageIndex = 0;
+    } else if (currentStageIndex >= stages.length) {
       currentStageIndex = stages.length - 1;
     }
     _markDirty();
@@ -132,7 +173,74 @@ class TemplateCreateController extends ChangeNotifier {
   void updateCurrentStageEventMinutes(int eventIndex, int minutes) {
     _replaceCurrentStageEvent(
       eventIndex,
-      currentStage.events[eventIndex].copyWith(estimatedMinutes: minutes),
+      currentStage.events[eventIndex].copyWith(
+        estimatedMinutes: minutes.clamp(0, 1500).toInt(),
+      ),
+    );
+  }
+
+  void addStepToCurrentStageEvent(int eventIndex) {
+    final event = currentStage.events[eventIndex];
+    final nextSteps = [
+      ...event.steps,
+      TemplateStageEventStep(
+        stepOrder: event.steps.length + 1,
+        description: '',
+        estimatedMinutes: 0,
+      ),
+    ];
+    _replaceCurrentStageEvent(
+      eventIndex,
+      event.copyWith(
+        steps: nextSteps,
+        estimatedMinutes: _sumStepMinutes(nextSteps),
+      ),
+    );
+  }
+
+  void updateCurrentStageEventStepDescription(
+    int eventIndex,
+    int stepIndex,
+    String value,
+  ) {
+    final event = currentStage.events[eventIndex];
+    if (stepIndex < 0 || stepIndex >= event.steps.length) return;
+    final nextSteps = [...event.steps];
+    nextSteps[stepIndex] = nextSteps[stepIndex].copyWith(description: value);
+    _replaceCurrentStageEvent(eventIndex, event.copyWith(steps: nextSteps));
+  }
+
+  void updateCurrentStageEventStepMinutes(
+    int eventIndex,
+    int stepIndex,
+    int minutes,
+  ) {
+    final event = currentStage.events[eventIndex];
+    if (stepIndex < 0 || stepIndex >= event.steps.length) return;
+    final nextSteps = [...event.steps];
+    nextSteps[stepIndex] = nextSteps[stepIndex].copyWith(
+      estimatedMinutes: minutes.clamp(0, 1500).toInt(),
+    );
+    _replaceCurrentStageEvent(
+      eventIndex,
+      event.copyWith(
+        steps: nextSteps,
+        estimatedMinutes: _sumStepMinutes(nextSteps),
+      ),
+    );
+  }
+
+  void deleteCurrentStageEventStep(int eventIndex, int stepIndex) {
+    final event = currentStage.events[eventIndex];
+    if (stepIndex < 0 || stepIndex >= event.steps.length) return;
+    final nextSteps = [...event.steps]..removeAt(stepIndex);
+    final renumbered = _renumberEventSteps(nextSteps);
+    _replaceCurrentStageEvent(
+      eventIndex,
+      event.copyWith(
+        steps: renumbered,
+        estimatedMinutes: _sumStepMinutes(renumbered),
+      ),
     );
   }
 
@@ -196,6 +304,15 @@ class TemplateCreateController extends ChangeNotifier {
     return true;
   }
 
+  void startStageEditing() {
+    currentStep = 2;
+    currentStageIndex = 0;
+    if (stages.isNotEmpty) {
+      _ensureCurrentStageHasEvent();
+    }
+    notifyListeners();
+  }
+
   void moveToStep(int step) {
     currentStep = step.clamp(1, 4);
     notifyListeners();
@@ -249,6 +366,7 @@ class TemplateCreateController extends ChangeNotifier {
       currentStageIndex,
       currentStage.copyWith(events: [_emptyEvent(1)]),
       notify: false,
+      markDirty: false,
     );
   }
 
@@ -258,11 +376,16 @@ class TemplateCreateController extends ChangeNotifier {
     _replaceStage(currentStageIndex, currentStage.copyWith(events: events));
   }
 
-  void _replaceStage(int index, TemplateStage stage, {bool notify = true}) {
+  void _replaceStage(
+    int index,
+    TemplateStage stage, {
+    bool notify = true,
+    bool markDirty = true,
+  }) {
     final next = [...stages];
     next[index] = stage;
     stages = next;
-    dirty = true;
+    if (markDirty) dirty = true;
     if (notify) notifyListeners();
   }
 
@@ -286,12 +409,12 @@ class TemplateCreateController extends ChangeNotifier {
       eventOrder: order,
       title: '',
       purpose: '',
-      estimatedMinutes: 25,
+      estimatedMinutes: 0,
       steps: const [
         TemplateStageEventStep(
           stepOrder: 1,
-          description: '明确要做什么',
-          estimatedMinutes: 10,
+          description: '',
+          estimatedMinutes: 0,
         ),
       ],
     );
@@ -302,5 +425,18 @@ class TemplateCreateController extends ChangeNotifier {
       for (var i = 0; i < input.length; i++)
         input[i].copyWith(stageOrder: i + 1),
     ];
+  }
+
+  static List<TemplateStageEventStep> _renumberEventSteps(
+    List<TemplateStageEventStep> input,
+  ) {
+    return [
+      for (var i = 0; i < input.length; i++)
+        input[i].copyWith(stepOrder: i + 1),
+    ];
+  }
+
+  static int _sumStepMinutes(List<TemplateStageEventStep> steps) {
+    return steps.fold<int>(0, (sum, step) => sum + step.estimatedMinutes);
   }
 }

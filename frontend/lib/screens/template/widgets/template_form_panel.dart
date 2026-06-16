@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../template_style.dart';
+import 'template_keyboard_dismiss.dart';
 
 class TemplateFormPanel extends StatelessWidget {
   final String? title;
@@ -58,6 +59,9 @@ class TemplateTextField extends StatelessWidget {
       maxLines: maxLines,
       keyboardType: keyboardType,
       onChanged: onChanged,
+      onTapOutside: (_) => dismissTemplateKeyboard(),
+      onTap: () => ensureTemplateInputVisible(context),
+      scrollPadding: templateInputScrollPadding(context),
       decoration: InputDecoration(
         labelText: label,
         filled: true,

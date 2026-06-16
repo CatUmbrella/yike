@@ -82,7 +82,7 @@ class _HomePageState extends State<HomePage> {
         addButtonOffset: _addButtonOffset,
         onAddButtonOffsetChanged: _setAddButtonOffset,
       ),
-      const TemplatePage(),
+      TemplatePage(active: _index == 2),
       const DataPage(),
     ];
     return Scaffold(

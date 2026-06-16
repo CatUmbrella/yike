@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../arrange/arrange_style.dart';
 
 class TemplateStyle {
-  static const background = Color(0xFFFAFAFC);
+  static const background = Color(0xFFF4F9FF);
   static const surface = Color(0xFFFFFFFF);
   static const accent = ArrangeStyle.accent;
   static const accentSoft = Color(0xFFEFF5FF);
@@ -12,8 +12,8 @@ class TemplateStyle {
   static const textSecondary = Color(0xFF667085);
   static const border = Color(0xFFE5E7EB);
   static const warning = Color(0xFFEF5350);
-  static const sidebar = Color(0xFFF4F4F5);
-  static const searchFill = Color(0xFFF3F4F6);
+  static const sidebar = Color(0xFFF4F9FF);
+  static const searchFill = Color(0xFFFFFFFF);
 
   static const panelShadow = [
     BoxShadow(color: Color(0x12000000), blurRadius: 20, offset: Offset(0, 8)),

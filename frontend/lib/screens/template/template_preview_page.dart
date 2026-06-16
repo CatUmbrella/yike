@@ -20,22 +20,24 @@ class TemplatePreviewPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.chevron_left_rounded),
-                    label: const Text('模板'),
-                  ),
-                  Expanded(
-                    child: Text(
+              SizedBox(
+                height: 46,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _TemplateBackButton(
+                        onTap: () => Navigator.pop(context),
+                      ),
+                    ),
+                    Text(
                       '预览',
                       textAlign: TextAlign.center,
                       style: TemplateStyle.titleStyle(context),
                     ),
-                  ),
-                  const SizedBox(width: 78),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
               _PreviewPanel(
@@ -139,6 +141,42 @@ class TemplatePreviewPage extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TemplateBackButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _TemplateBackButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: const Padding(
+        padding: EdgeInsets.only(right: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chevron_left_rounded,
+              size: 38,
+              color: TemplateStyle.accent,
+            ),
+            SizedBox(width: 2),
+            Text(
+              '模板',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: TemplateStyle.textPrimary,
+              ),
+            ),
+          ],
         ),
       ),
     );

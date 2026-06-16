@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'template_create_controller.dart';
+import 'widgets/template_keyboard_dismiss.dart';
 
 Future<void> handleTemplateCreateExit(
   BuildContext context,
   TemplateCreateController controller,
 ) async {
-  if (!controller.hasAnyContent) {
+  if (!controller.dirty) {
     _popToHome(context);
     return;
   }
@@ -64,6 +65,9 @@ Future<String?> _requestTemplateName(BuildContext context) {
         controller: input,
         autofocus: true,
         maxLength: 20,
+        onTapOutside: (_) => dismissTemplateKeyboard(),
+        onTap: () => ensureTemplateInputVisible(ctx),
+        scrollPadding: templateInputScrollPadding(ctx),
         decoration: const InputDecoration(hintText: '模板名称'),
       ),
       actions: [

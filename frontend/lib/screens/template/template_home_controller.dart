@@ -16,6 +16,7 @@ class TemplateHomeController extends ChangeNotifier {
   TemplateDeployTab activeDeployTab = TemplateDeployTab.notStarted;
   TemplateLibraryTab activeLibraryTab = TemplateLibraryTab.official;
   String searchQuery = '';
+  DateTime selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   List<TaskTemplate> drafts = const [];
   List<TemplateDeployment> notStartedDeployments = const [];
@@ -72,24 +73,42 @@ class TemplateHomeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectMonth(DateTime month) {
+    final next = DateTime(month.year, month.month);
+    if (selectedMonth.year == next.year && selectedMonth.month == next.month) {
+      return;
+    }
+    selectedMonth = next;
+    notifyListeners();
+  }
+
   List<TaskTemplate> get filteredDrafts {
     return _filterTemplates(drafts);
   }
 
   List<TaskTemplate> get filteredOfficialTemplates {
-    return _filterTemplates(officialTemplates);
+    return _filterTemplates(officialTemplates, filterByMonth: false);
   }
 
   List<TemplateDeployment> get filteredNotStartedDeployments {
-    return _filterDeployments(notStartedDeployments);
+    return _filterDeployments(
+      notStartedDeployments,
+      (deployment) => deployment.deployedAt,
+    );
   }
 
   List<TemplateDeployment> get filteredActiveDeployments {
-    return _filterDeployments(activeDeployments);
+    return _filterDeployments(
+      activeDeployments,
+      (deployment) => deployment.enabledAt ?? deployment.deployedAt,
+    );
   }
 
   List<TemplateDeployment> get filteredCompletedDeployments {
-    return _filterDeployments(completedDeployments);
+    return _filterDeployments(
+      completedDeployments,
+      (deployment) => deployment.completedAt ?? deployment.deployedAt,
+    );
   }
 
   Future<void> deleteDraft(int templateId) async {
@@ -104,6 +123,13 @@ class TemplateHomeController extends ChangeNotifier {
 
   Future<void> enableDeployment(int deploymentId) async {
     await _repository.enableDeployment(deploymentId);
+    activeSection = TemplateSection.deploy;
+    activeDeployTab = TemplateDeployTab.active;
+    await load();
+  }
+
+  Future<void> enableDeploymentStage(int deploymentId, int stageId) async {
+    await _repository.enableDeploymentStage(deploymentId, stageId);
     activeSection = TemplateSection.deploy;
     activeDeployTab = TemplateDeployTab.active;
     await load();
@@ -140,28 +166,39 @@ class TemplateHomeController extends ChangeNotifier {
     await load();
   }
 
-  List<TaskTemplate> _filterTemplates(List<TaskTemplate> templates) {
+  List<TaskTemplate> _filterTemplates(
+    List<TaskTemplate> templates, {
+    bool filterByMonth = true,
+  }) {
     final query = searchQuery.trim();
-    if (query.isEmpty) return templates;
     return templates
         .where(
           (template) =>
-              template.name.contains(query) || template.goal.contains(query),
+              (!filterByMonth || _isSelectedMonth(template.createdAt)) &&
+              (query.isEmpty ||
+                  template.name.contains(query) ||
+                  template.goal.contains(query)),
         )
         .toList();
   }
 
   List<TemplateDeployment> _filterDeployments(
     List<TemplateDeployment> deployments,
+    DateTime Function(TemplateDeployment deployment) dateBuilder,
   ) {
     final query = searchQuery.trim();
-    if (query.isEmpty) return deployments;
     return deployments
         .where(
           (deployment) =>
-              deployment.template.name.contains(query) ||
-              deployment.template.goal.contains(query),
+              _isSelectedMonth(dateBuilder(deployment)) &&
+              (query.isEmpty ||
+                  deployment.template.name.contains(query) ||
+                  deployment.template.goal.contains(query)),
         )
         .toList();
+  }
+
+  bool _isSelectedMonth(DateTime date) {
+    return date.year == selectedMonth.year && date.month == selectedMonth.month;
   }
 }
