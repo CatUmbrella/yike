@@ -202,6 +202,14 @@ class PomodoroTimerController extends ChangeNotifier {
     return _repository.createInboxEventFromIdea(draft);
   }
 
+  void syncElapsedFromClock() {
+    _syncElapsedFromClock();
+  }
+
+  void persistCurrentSnapshot() {
+    _saveCurrentSnapshot();
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -211,24 +219,34 @@ class PomodoroTimerController extends ChangeNotifier {
   void _startTicker() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final current = snapshot;
-      if (current == null ||
-          current.session.status != PomodoroTimerStatus.running) {
-        return;
-      }
-      snapshot = _copySnapshot(
-        current,
-        session: current.session.copyWith(
-          durationSec: current.session.durationSec + 1,
-          tomatoCount:
-              (current.session.durationSec + 1) ~/
-              PomodoroConstants.tomatoSeconds,
-          updatedAt: DateTime.now(),
-        ),
-      );
-      _saveCurrentSnapshot();
-      notifyListeners();
+      _syncElapsedFromClock();
     });
+  }
+
+  void _syncElapsedFromClock() {
+    final current = snapshot;
+    if (current == null ||
+        current.session.status != PomodoroTimerStatus.running) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final elapsedSinceUpdate = now
+        .difference(current.session.updatedAt)
+        .inSeconds;
+    if (elapsedSinceUpdate <= 0) return;
+
+    final durationSec = current.session.durationSec + elapsedSinceUpdate;
+    snapshot = _copySnapshot(
+      current,
+      session: current.session.copyWith(
+        durationSec: durationSec,
+        tomatoCount: durationSec ~/ PomodoroConstants.tomatoSeconds,
+        updatedAt: now,
+      ),
+    );
+    _saveCurrentSnapshot();
+    notifyListeners();
   }
 
   void _saveCurrentSnapshot({

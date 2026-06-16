@@ -27,12 +27,14 @@ class PomodoroTimerPage extends StatefulWidget {
   State<PomodoroTimerPage> createState() => _PomodoroTimerPageState();
 }
 
-class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
+class _PomodoroTimerPageState extends State<PomodoroTimerPage>
+    with WidgetsBindingObserver {
   late final PomodoroTimerController _controller;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = PomodoroTimerController()
       ..start(
         eventId: widget.eventId,
@@ -42,7 +44,17 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _controller.syncElapsedFromClock();
+    } else {
+      _controller.persistCurrentSnapshot();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
