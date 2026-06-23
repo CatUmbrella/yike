@@ -2,7 +2,7 @@ from database import Base
 from sqlalchemy import Column, Integer, String, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class Event(Base):
     __tablename__="events"
@@ -87,12 +87,12 @@ class StepItem(BaseModel):
 class EventItem(BaseModel):
     title:str = ""
     summary:str = ""
-    steps:list[StepItem] = []
+    steps:list[StepItem] = Field(default_factory=list)
     total_minutes:int = 0
 
 #AI拆解响应模型
 class ParseResponse(BaseModel):
-    events:list[EventItem] = []
+    events:list[EventItem] = Field(default_factory=list)
 
 #事件创建请求模型
 class EventCreate(BaseModel):
@@ -104,7 +104,7 @@ class EventCreate(BaseModel):
     scheduled_date: str | None = None
     time_slot: str | None = None
     calendar_order: int = 0
-    steps: list[StepItem] = []
+    steps: list[StepItem] = Field(default_factory=list)
 
 #事件返回模型
 class EventResponse(BaseModel):
@@ -117,7 +117,7 @@ class EventResponse(BaseModel):
     scheduled_date: str | None = None
     time_slot: str | None = None
     calendar_order: int = 0
-    steps: list[StepItem] = []
+    steps: list[StepItem] = Field(default_factory=list)
     created_at: str = ""
     completed_at: str | None = None
 

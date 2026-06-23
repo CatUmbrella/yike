@@ -1,11 +1,26 @@
 import json
+import logging
+import time
+from dataclasses import dataclass, field
+from json import JSONDecodeError
+from typing import Any
 
 from openai import OpenAI
 
 from config import AI_BASE_URL, AI_MODEL, OPENAI_API_KEY
+from models import ParseResponse
+from services.agent_trace import AgentRunTrace, record_agent_run_trace
+from services.ai_policy import (
+    POLICY_VERSION,
+    RETRIEVE_PARSE_POLICY_TOOL,
+    retrieve_parse_policy,
+)
 
-#提示词
-SYSTEM_PROMPT = """你是任务事件抽取与轻量拆解助手。只处理当前用户输入，返回纯 JSON。
+logger = logging.getLogger("yike.ai_parser")
+
+PROMPT_VERSION = "event_parse_v2"
+
+BASE_PROMPT = """你是任务事件抽取与轻量拆解助手。只处理当前用户输入，返回纯 JSON。
 
 规则：
 - 只提取用户刻意要执行、推进、完成或提醒的事情。
@@ -28,7 +43,17 @@ SYSTEM_PROMPT = """你是任务事件抽取与轻量拆解助手。只处理当�
 - 不返回 null；无法判断的文本字段用空字符串。
 - title、summary、description 必须使用中文。
 
-只返回以下 JSON 结构，不要 Markdown、解释或额外字段：
+工具：
+- 如果需要确认任务抽取、事件拆分、步骤拆分或耗时规则，可以调用 retrieve_parse_policy 获取规则片段和示例。
+- retrieve_parse_policy 只提供只读规则参考，不负责生成事件，也不替你做业务判断。"""
+
+STATIC_POLICY_EXAMPLES = """固定规则示例：
+- 输入只描述日常生活动作，且没有明确提醒或专门安排时，返回 {"events": []}。
+- 输入明确取消某个事项时，不输出该事项，返回 {"events": []}。
+- 输入表达不确定想法但没有要求确认、查询、询问或决定时，返回 {"events": []}。
+- 简单任务可以 steps 为空；不好合理估时的任务 total_minutes 可以为 0。"""
+
+OUTPUT_SCHEMA = """只返回以下 JSON 结构，不要 Markdown、解释或额外字段：
 {
   "events": [
     {
@@ -46,7 +71,259 @@ SYSTEM_PROMPT = """你是任务事件抽取与轻量拆解助手。只处理当�
   ]
 }"""
 
-def parse_event_text(text: str) -> dict:
+
+def build_prompt() -> str:
+    return "\n\n".join(
+        [
+            f"Prompt version: {PROMPT_VERSION}",
+            BASE_PROMPT,
+            STATIC_POLICY_EXAMPLES,
+            OUTPUT_SCHEMA,
+        ]
+    )
+
+
+SYSTEM_PROMPT = build_prompt()
+
+@dataclass
+class AgentModelResult:
+    content: str
+    llm_call_count: int = 1
+    policy_ids: list[str] = field(default_factory=list)
+    tool_called: bool = False
+
+
+class EventParseAgent:
+    def __init__(self, client: Any, model: str = AI_MODEL):
+        self.client = client
+        self.model = model
+
+    def parse(self, text: str, input_length: int | None = None) -> dict:
+        started = time.perf_counter()
+        trace = AgentRunTrace(
+            prompt_version=PROMPT_VERSION,
+            policy_version=POLICY_VERSION,
+            model=self.model,
+            input_length=input_length if input_length is not None else len(text or ""),
+        )
+        if not text or not text.strip():
+            trace.elapsed_ms = _elapsed_ms(started)
+            record_agent_run_trace(trace)
+            return {"events": []}
+
+        try:
+            model_result = self._call_llm(build_prompt(), text)
+            trace.llm_call_count = model_result.llm_call_count
+            trace.policy_tool_called = model_result.tool_called
+            trace.policy_ids = model_result.policy_ids
+
+            raw_content = model_result.content
+            try:
+                payload = json.loads(sanitize_model_json(raw_content))
+            except JSONDecodeError as exc:
+                trace.repaired = True
+                trace.llm_call_count += 1
+                raw_content = repair_invalid_json_once(
+                    self.client,
+                    self.model,
+                    raw_content,
+                    exc,
+                )
+                payload = json.loads(sanitize_model_json(raw_content))
+
+            result, validation_warnings = validate_event_contract(payload)
+            trace.validation_warnings = validation_warnings
+            trace.events_count = len(result.get("events") or [])
+            trace.elapsed_ms = _elapsed_ms(started)
+            logger.info(
+                (
+                    "agent.parse.success trace_id=%s prompt_version=%s model=%s "
+                    "llm_calls=%s policy_tool_called=%s policy_ids=%s "
+                    "repaired=%s events=%s"
+                ),
+                trace.trace_id,
+                PROMPT_VERSION,
+                self.model,
+                trace.llm_call_count,
+                trace.policy_tool_called,
+                ",".join(trace.policy_ids),
+                trace.repaired,
+                trace.events_count,
+            )
+            record_agent_run_trace(trace)
+            return result
+        except Exception as exc:
+            trace.error_type = type(exc).__name__
+            trace.elapsed_ms = _elapsed_ms(started)
+            record_agent_run_trace(trace)
+            raise
+
+    def _call_llm(self, system_prompt: str, user_text: str) -> AgentModelResult:
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_text},
+        ]
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                tools=[RETRIEVE_PARSE_POLICY_TOOL],
+                tool_choice="auto",
+                temperature=0.3,
+            )
+        except Exception as exc:
+            if not _looks_like_tool_support_error(exc):
+                raise
+            logger.warning(
+                "agent.policy_tool.unsupported model=%s error_type=%s",
+                self.model,
+                type(exc).__name__,
+            )
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,
+            )
+
+        message = response.choices[0].message
+        tool_calls = list(getattr(message, "tool_calls", None) or [])
+        if not tool_calls:
+            content = getattr(message, "content", None) or ""
+            return AgentModelResult(content=content.strip(), llm_call_count=1)
+
+        assistant_message = _assistant_message_to_dict(message)
+        messages.append(assistant_message)
+
+        policy_ids: list[str] = []
+        for tool_call in tool_calls:
+            function = getattr(tool_call, "function", None)
+            name = getattr(function, "name", "")
+            arguments = getattr(function, "arguments", "{}")
+            tool_call_id = getattr(tool_call, "id", "")
+            if name != "retrieve_parse_policy":
+                tool_payload = {
+                    "error": f"Unsupported tool: {name}",
+                    "policy_version": POLICY_VERSION,
+                    "items": [],
+                }
+            else:
+                args = _parse_tool_arguments(arguments)
+                tool_payload = retrieve_parse_policy(args.get("policy_keys"))
+                policy_ids.extend(item["id"] for item in tool_payload["items"])
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": name,
+                    "content": json.dumps(tool_payload, ensure_ascii=False),
+                }
+            )
+
+        final_response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.3,
+        )
+        content = final_response.choices[0].message.content or ""
+        return AgentModelResult(
+            content=content.strip(),
+            llm_call_count=2,
+            policy_ids=policy_ids,
+            tool_called=True,
+        )
+
+def sanitize_model_json(content: str) -> str:
+    text = (content or "").strip()
+    fenced = _extract_fenced_json(text)
+    if fenced is not None:
+        text = fenced.strip()
+
+    if text.startswith("{") and text.endswith("}"):
+        return text
+
+    extracted = _extract_first_json_object(text)
+    return extracted if extracted is not None else text
+
+
+def validate_event_contract(payload: Any) -> tuple[dict, list[str]]:
+    warnings: list[str] = []
+    if not isinstance(payload, dict):
+        warnings.append("payload_not_object")
+        payload = {}
+
+    events = payload.get("events")
+    if not isinstance(events, list):
+        warnings.append("events_not_list")
+        events = []
+
+    cleaned_events: list[dict[str, Any]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            warnings.append("event_not_object")
+            continue
+
+        title = _text_value(event.get("title"))
+        if not title.strip():
+            warnings.append("empty_title_event_filtered")
+            continue
+
+        steps, step_warnings = _clean_steps(event.get("steps"))
+        warnings.extend(step_warnings)
+        total_minutes = _non_negative_int(event.get("total_minutes"))
+        if steps and total_minutes == 0:
+            total_minutes = sum(step["estimated_min"] for step in steps)
+            if total_minutes > 0:
+                warnings.append("total_minutes_filled_from_steps")
+
+        cleaned_events.append(
+            {
+                "title": title,
+                "summary": _text_value(event.get("summary")),
+                "total_minutes": total_minutes,
+                "steps": steps,
+            }
+        )
+
+    response = ParseResponse(events=cleaned_events)
+    if hasattr(response, "model_dump"):
+        return response.model_dump(), warnings
+    return response.dict(), warnings
+
+
+def repair_invalid_json_once(
+    client: Any,
+    model: str,
+    raw_content: str,
+    error: JSONDecodeError,
+) -> str:
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "你只修复 JSON 格式。不要改写业务含义，不要补充新事件，"
+                    "不要添加解释，只返回一个合法 JSON 对象。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"JSON 解析错误：{error.msg}\n"
+                    "请把以下内容修复为合法 JSON，结构必须是 {\"events\": [...]}：\n"
+                    f"{raw_content}"
+                ),
+            },
+        ],
+        temperature=0,
+    )
+    content = response.choices[0].message.content or ""
+    return content.strip()
+
+
+def parse_event_text(text: str, input_length: int | None = None) -> dict:
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not configured")
 
@@ -54,23 +331,157 @@ def parse_event_text(text: str) -> dict:
         api_key=OPENAI_API_KEY,
         base_url=AI_BASE_URL,
     )
+    return EventParseAgent(client).parse(text, input_length=input_length)
 
-    response = client.chat.completions.create(
-        model=AI_MODEL,
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text},
-        ],
-        temperature=0.3,
+
+def _extract_fenced_json(text: str) -> str | None:
+    if not text.startswith("```"):
+        return None
+
+    lines = text.splitlines()
+    if not lines:
+        return None
+
+    if lines[0].lstrip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines)
+
+
+def _extract_first_json_object(text: str) -> str | None:
+    start = text.find("{")
+    if start < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+
+    return None
+
+
+def _clean_steps(value: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    warnings: list[str] = []
+    if not isinstance(value, list):
+        if value is not None:
+            warnings.append("steps_not_list")
+        return [], warnings
+
+    steps: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            warnings.append("step_not_object")
+            continue
+        steps.append(
+            {
+                "step_order": len(steps) + 1,
+                "description": _text_value(item.get("description")),
+                "estimated_min": _non_negative_int(item.get("estimated_min")),
+            }
+        )
+    return steps, warnings
+
+
+def _text_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    return ""
+
+
+def _non_negative_int(value: Any) -> int:
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, int):
+        return max(value, 0)
+    if isinstance(value, float):
+        return max(int(value), 0)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return 0
+        try:
+            return max(int(text), 0)
+        except ValueError:
+            return 0
+    return 0
+
+
+def _parse_tool_arguments(arguments: Any) -> dict[str, Any]:
+    if isinstance(arguments, dict):
+        return arguments
+    if not isinstance(arguments, str) or not arguments.strip():
+        return {}
+    try:
+        value = json.loads(arguments)
+    except JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _assistant_message_to_dict(message: Any) -> dict[str, Any]:
+    if hasattr(message, "model_dump"):
+        data = message.model_dump(exclude_none=True)
+    else:
+        data = {
+            "role": "assistant",
+            "content": getattr(message, "content", None),
+            "tool_calls": [
+                _tool_call_to_dict(tool_call)
+                for tool_call in (getattr(message, "tool_calls", None) or [])
+            ],
+        }
+    data.setdefault("role", "assistant")
+    return data
+
+
+def _tool_call_to_dict(tool_call: Any) -> dict[str, Any]:
+    if hasattr(tool_call, "model_dump"):
+        return tool_call.model_dump(exclude_none=True)
+
+    function = getattr(tool_call, "function", None)
+    return {
+        "id": getattr(tool_call, "id", ""),
+        "type": getattr(tool_call, "type", "function"),
+        "function": {
+            "name": getattr(function, "name", ""),
+            "arguments": getattr(function, "arguments", "{}"),
+        },
+    }
+
+
+def _looks_like_tool_support_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in [
+            "tool",
+            "tools",
+            "tool_choice",
+            "function calling",
+            "function_calling",
+        ]
     )
 
-    #选择回答，并去除回答中的空格
-    content = response.choices[0].message.content.strip()
 
-    #清理可能存在的Markdown标记
-    if content.startswith("```"):
-        content = content.split("\n", 1)[-1]
-        if content.endswith("```"):
-            content = content[:-3]
-
-    return json.loads(content)
+def _elapsed_ms(started: float) -> int:
+    return int((time.perf_counter() - started) * 1000)

@@ -15,6 +15,15 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     f"sqlite:///{(DATA_DIR / 'yike.db').as_posix()}",
 )
+AGENT_TRACE_DB_PATH = Path(
+    os.getenv("AGENT_TRACE_DB_PATH", DATA_DIR / "yike_agent_traces.db")
+).expanduser().resolve()
+AGENT_TRACE_ENABLED = os.getenv("AGENT_TRACE_ENABLED", "true").lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 CORS_ORIGINS = _split_csv(os.getenv("CORS_ORIGINS", "*"))
 API_TOKEN = os.getenv("API_TOKEN", "")

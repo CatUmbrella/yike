@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS, LOG_LEVEL
 from database import init_db
 from routers import events
+from services.agent_trace import init_agent_trace_db
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -27,6 +28,7 @@ app.include_router(events.router)
 @app.on_event("startup")
 def on_startup():
     init_db()
+    init_agent_trace_db()
 
 @app.get("/")
 def root():

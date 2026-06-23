@@ -25,7 +25,7 @@ def parse_event_text_api(req: ParseRequest):
     text_len = len(req.text or "")
     logger.info("parse_event.start text_len=%s", text_len)
     try:
-        result = parse_event_text(req.text)
+        result = parse_event_text(req.text, input_length=text_len)
         events_count = len(result.get("events") or [])
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         logger.info(
