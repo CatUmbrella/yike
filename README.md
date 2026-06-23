@@ -14,7 +14,7 @@
 
 当前主要功能包括：
 
-- **AI 任务拆解**：支持用户通过自然语言输入任务，由后端调用大模型解析为结构化事件、执行步骤和预计耗时。
+- **AI 任务拆解**：支持用户通过自然语言输入任务，由后端轻量 Agent 解析为结构化事件、执行步骤和预计耗时。
 - **事件管理**：支持事件创建、编辑、查看、完成、软删除与恢复，并可记录事件目的、步骤、四象限分类和日程信息。
 - **时间安排**：支持将事件安排到指定日期和时间段，并通过安排页管理待办事件和事件优先级。
 - **番茄钟专注**：支持围绕具体事件启动专注计时，记录专注时长、打断事项、临时想法和步骤完成情况。
@@ -31,6 +31,7 @@
 | 数据库ORM        | SQLAlchemy                           |
 | 数据结构化与校验 | Pydantic                             |
 | AI 任务解析      | OpenAI-compatible API / DeepSeek API |
+| Agent 能力       | Function Calling, Policy RAG, Trace  |
 | 前后端通信       | RESTful API, HTTP                    |
 | 配置与跨域       | 环境变量, CORS                       |
 | 测试与调试       | flutter_test, sqflite_common_ffi     |
@@ -42,7 +43,7 @@ yike/
 ├── backend/              # FastAPI 后端服务
 │   ├── main.py           # 应用入口
 │   ├── routers/          # API 路由
-│   ├── services/         # AI 解析等业务服务
+│   ├── services/         # AI Agent、Policy、Trace 等业务服务
 │   ├── models.py         # 数据模型与接口模型
 │   ├── database.py       # 数据库初始化与连接
 │   └── requirements.txt  # 后端依赖
@@ -72,9 +73,11 @@ Flutter 移动端
     ↓
 FastAPI 后端
     ↓
-大模型 API
+轻量任务解析 Agent
     ↓
-结构化事件与步骤
+大模型 API / Function Calling / Policy RAG
+    ↓
+JSON 清洗与结构化校验
     ↓
 返回移动端本地 SQLite 保存与展示
     ↓
@@ -82,6 +85,28 @@ FastAPI 后端
 ```
 
 在当前阶段，SQLite 主要承担移动端本地业务数据存储，保证事件管理、番茄钟记录和模板等基础功能可以离线使用；后端主要承担 AI 任务解析、基础事件接口和后续云同步能力预留。
+
+### AI 解析后端
+
+后端 AI 解析采用轻量 Agent 设计，不引入重型 Agent 框架或向量数据库，保持原 `/api/events/parse` 交互不变：
+
+```text
+/api/events/parse
+    ↓
+EventParseAgent
+    ↓
+LLM + retrieve_parse_policy 工具声明
+    ↓
+可选 Function Calling 获取规则片段与示例
+    ↓
+模型输出事件 JSON
+    ↓
+JSON 清洗 / Pydantic 契约校验 / 一次 JSON 修复
+    ↓
+ParseResponse
+```
+
+其中 `retrieve_parse_policy` 是只读 Policy RAG 工具，用于按需返回任务抽取规则和 few-shot 示例；模型负责语义判断，后端工具负责规则上下文、结构校验和失败兜底。Agent 运行过程会写入独立的 `yike_agent_traces.db`，记录模型、工具调用、耗时、修复状态和校验告警等元信息，不存用户原文、完整 Prompt 或完整模型输出。
 
 ## 后端接口说明
 
@@ -151,6 +176,8 @@ http://127.0.0.1:8000/docs
 | `AI_MODEL`       | 使用的模型名称               |
 | `API_TOKEN`      | 后端接口访问 Token，可选     |
 | `DATABASE_URL`   | 后端 SQLite 数据库地址，可选 |
+| `AGENT_TRACE_DB_PATH` | Agent Trace SQLite 路径，可选 |
+| `AGENT_TRACE_ENABLED` | 是否记录 Agent Trace，默认开启 |
 | `CORS_ORIGINS`   | 允许跨域访问的来源           |
 
 ### 2. 启动前端
@@ -206,10 +233,15 @@ adb reverse tcp:8000 tcp:8000
 
 后端使用 SQLAlchemy 管理 SQLite 数据表，后端数据库当前主要用于 AI 解析后的结构化事件存储和基础事件接口，详细表结构见 [数据设计文档](./docs/schema.md)。
 
+Agent 运行观测数据使用独立 SQLite 文件保存，默认路径为 `backend/data/yike_agent_traces.db`，生产环境可通过 `AGENT_TRACE_DB_PATH` 指向 `/var/lib/yike/yike_agent_traces.db`。该库只保存运行元信息，不参与业务数据同步。
+
 ## 项目亮点
 
 - **AI 与任务录入流程结合**  
   将大模型能力接入任务录入流程，把自然语言任务自动拆解为结构化事件、步骤和预计耗时，降低用户手动规划成本。
+
+- **轻量 Agent 解析后端**  
+  在 FastAPI 中实现轻量 Workflow Agent，通过 Function Calling 调用只读 Policy RAG 工具获取规则片段和示例，并对最终输出做 JSON 清洗、Pydantic 契约校验和 Agent Run Trace 记录，在保证可观测性的同时控制复杂度与性能开销。
 
 - **完整的任务执行闭环**  
   围绕「任务录入 → 任务安排 → 专注执行 → 结果记录」设计核心链路，而不是只停留在待办列表或计时工具。
@@ -239,6 +271,7 @@ adb reverse tcp:8000 tcp:8000
 - 打断事项、临时想法和历史记录
 - 移动端SQLite本地持久化
 - FastAPI后端基础服务
+- 后端轻量 Agent 任务解析、Function Calling 和独立 Trace 记录
 
 持续迭代中：
 
